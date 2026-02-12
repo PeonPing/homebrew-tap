@@ -1,8 +1,8 @@
 class PeonPing < Formula
   desc "Sound effects and desktop notifications for AI coding agents"
   homepage "https://peonping.com"
-  url "https://github.com/PeonPing/peon-ping/archive/refs/tags/v1.5.14.tar.gz"
-  sha256 "9ccac99b600c47e775e66140e14e0560aec22cf144c6ef3676e0dd8bf1f0595a"
+  url "https://github.com/PeonPing/peon-ping/archive/refs/tags/v1.6.0.tar.gz"
+  sha256 "6f01dc5089bea8347b961e4b9c950e0528e871166db16625909c52c30a8d07bd"
   license "MIT"
 
   depends_on "python@3"
@@ -69,9 +69,9 @@ class PeonPing < Formula
       REGISTRY_URL="https://peonping.github.io/registry/index.json"
 
       DEFAULT_PACKS="peon peasant glados sc_kerrigan sc_battlecruiser ra2_kirov dota2_axe duke_nukem tf2_engineer hd2_helldiver"
-      FALLBACK_PACKS="acolyte_ru aoe2 aom_greek brewmaster_ru dota2_axe duke_nukem glados hd2_helldiver molag_bal peon peon_cz peon_es peon_fr peon_pl peon_ru peasant peasant_cz peasant_es peasant_fr peasant_ru ra2_kirov ra2_soviet_engineer ra_soviet rick sc_battlecruiser sc_firebat sc_kerrigan sc_medic sc_scv sc_tank sc_terran sc_vessel sheogorath sopranos tf2_engineer wc2_peasant"
+      FALLBACK_PACKS="acolyte_de acolyte_ru aoe2 aom_greek brewmaster_ru dota2_axe duke_nukem glados hd2_helldiver molag_bal murloc ocarina_of_time peon peon_cz peon_de peon_es peon_fr peon_pl peon_ru peasant peasant_cz peasant_es peasant_fr peasant_ru ra2_kirov ra2_soviet_engineer ra_soviet rick sc_battlecruiser sc_firebat sc_kerrigan sc_medic sc_scv sc_tank sc_terran sc_vessel sheogorath sopranos tf2_engineer wc2_peasant"
       FALLBACK_REPO="PeonPing/og-packs"
-      FALLBACK_REF="v1.0.0"
+      FALLBACK_REF="v1.1.0"
 
       if [ ! -d "$BASE_DIR" ]; then
         echo "Error: $BASE_DIR not found. Is Claude Code installed?"
@@ -255,8 +255,8 @@ class PeonPing < Formula
       echo ""
       echo "Quick controls:"
       echo "  /peon-ping-toggle  — toggle sounds in Claude Code"
-      echo "  peon --toggle      — toggle sounds from any terminal"
-      echo "  peon --status      — check if sounds are paused"
+      echo "  peon toggle        — toggle sounds from any terminal"
+      echo "  peon status        — check if sounds are paused"
       echo ""
       echo "Ready to work!"
     EOS
@@ -271,17 +271,17 @@ class PeonPing < Formula
 
       Options:
         peon-ping-setup              Install 10 default packs
-        peon-ping-setup --all        Install all 40 packs
+        peon-ping-setup --all        Install all packs
         peon-ping-setup --packs=peon,glados  Install specific packs
 
       After setup, use:
-        peon --toggle   Mute/unmute sounds
-        peon --status   Check current status
-        peon --help     See all commands
+        peon toggle     Mute/unmute sounds
+        peon status     Check current status
+        peon help       See all commands
     EOS
   end
 
   test do
-    assert_match "peon-ping", shell_output("#{bin}/peon --help")
+    assert_match "peon-ping", shell_output("#{bin}/peon help")
   end
 end
