@@ -255,13 +255,14 @@ class PeonPing < Formula
         if [ -d "$INSTALL_DIR/packs" ] && [ ! -L "$INSTALL_DIR/packs" ]; then
           echo "Migrating Claude Code packs to shared location..."
           # Move any existing packs that aren't in the shared dir yet
+          mkdir -p "$PACKS_DIR"
           for existing_pack in "$INSTALL_DIR/packs/"*/; do
             pack_name=$(basename "$existing_pack")
             if [ "$pack_name" != "*" ] && [ ! -d "$PACKS_DIR/$pack_name" ]; then
               mv "$existing_pack" "$PACKS_DIR/"
             fi
           done
-          rm -rf "$INSTALL_DIR/packs"
+          rm -r "$INSTALL_DIR/packs"
         fi
         ln -sfn "$PACKS_DIR" "$INSTALL_DIR/packs"
 
@@ -330,9 +331,9 @@ class PeonPing < Formula
             echo "Existing OpenCode install found. Updating plugin..."
           fi
 
-          # Copy plugin to OpenCode plugins directory
+          # Symlink plugin to OpenCode plugins directory (so brew upgrade auto-updates)
           mkdir -p "$OPENCODE_PLUGINS_DIR"
-          cp "$PLUGIN_SRC" "$OPENCODE_PLUGINS_DIR/peon-ping.ts"
+          ln -sf "$PLUGIN_SRC" "$OPENCODE_PLUGINS_DIR/peon-ping.ts"
           echo "Plugin installed to $OPENCODE_PLUGINS_DIR/peon-ping.ts"
 
           # Create config (only on fresh install)
