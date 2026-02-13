@@ -33,11 +33,6 @@ class PeonPing < Formula
     # Install icon
     (libexec/"docs").install "docs/peon-icon.png" if (buildpath/"docs/peon-icon.png").exist?
 
-    # Install setup scripts
-    if (buildpath/"scripts/setup-icon.sh").exist?
-      (libexec/"scripts").install "scripts/setup-icon.sh"
-    end
-
     # Create wrapper script that delegates to peon.sh
     (bin/"peon").write <<~EOS
       #!/bin/bash
@@ -409,10 +404,10 @@ class PeonPing < Formula
         echo ""
         if command -v terminal-notifier >/dev/null 2>&1; then
           echo "  Optional: replace terminal-notifier's default icon with the peon icon:"
-          if [ -f "$LIBEXEC/scripts/setup-icon.sh" ]; then
-            echo "    bash $LIBEXEC/scripts/setup-icon.sh"
+          if [ -f "$LIBEXEC/adapters/opencode/setup-icon.sh" ]; then
+            echo "    bash $LIBEXEC/adapters/opencode/setup-icon.sh"
           else
-            echo "    bash <(curl -fsSL https://raw.githubusercontent.com/PeonPing/peon-ping/main/scripts/setup-icon.sh)"
+            echo "    bash <(curl -fsSL https://raw.githubusercontent.com/PeonPing/peon-ping/main/adapters/opencode/setup-icon.sh)"
           fi
           echo ""
         fi
