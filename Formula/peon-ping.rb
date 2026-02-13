@@ -1,8 +1,8 @@
 class PeonPing < Formula
   desc "Sound effects and desktop notifications for AI coding agents"
   homepage "https://peonping.com"
-  url "https://github.com/PeonPing/peon-ping/archive/refs/tags/v1.6.0.tar.gz"
-  sha256 "6f01dc5089bea8347b961e4b9c950e0528e871166db16625909c52c30a8d07bd"
+  url "https://github.com/PeonPing/peon-ping/archive/refs/tags/v1.7.0.tar.gz"
+  sha256 "0762b42a1de8a57f462daf2c0612b9b24d2c739cbc00f106da2a9a11740bd19b"
   license "MIT"
 
   depends_on "python@3"
@@ -16,6 +16,9 @@ class PeonPing < Formula
     libexec.install "install.sh"
     libexec.install "completions.bash"
     libexec.install "completions.fish"
+
+    # Install relay server (devcontainer audio support)
+    libexec.install "relay.sh" if (buildpath/"relay.sh").exist?
 
     # Install adapters
     (libexec/"adapters").install Dir["adapters/*.sh"]
@@ -227,6 +230,8 @@ class PeonPing < Formula
         ln -sf "$LIBEXEC/uninstall.sh" "$INSTALL_DIR/uninstall.sh"
         ln -sf "$LIBEXEC/completions.bash" "$INSTALL_DIR/completions.bash"
         ln -sf "$LIBEXEC/completions.fish" "$INSTALL_DIR/completions.fish"
+        # Link relay server if available
+        [ -f "$LIBEXEC/relay.sh" ] && ln -sf "$LIBEXEC/relay.sh" "$INSTALL_DIR/relay.sh"
         mkdir -p "$INSTALL_DIR/adapters"
         for f in "$LIBEXEC/adapters/"*.sh; do
           [ -f "$f" ] && ln -sf "$f" "$INSTALL_DIR/adapters/"
