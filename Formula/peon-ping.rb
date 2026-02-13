@@ -366,6 +366,12 @@ class PeonPing < Formula
             echo "Config already exists, preserved."
           fi
 
+          # Copy peon icon to plugin config dir (used by resolveIconPath())
+          ICON_SRC="$LIBEXEC/docs/peon-icon.png"
+          if [ -f "$ICON_SRC" ]; then
+            cp "$ICON_SRC" "$OPENCODE_PEON_DIR/peon-icon.png"
+          fi
+
           echo "OpenCode setup complete."
         fi
       fi
@@ -391,6 +397,20 @@ class PeonPing < Formula
         echo "OpenCode:"
         echo "  Plugin:  $OPENCODE_DIR/plugins/peon-ping.ts"
         echo "  Config:  $OPENCODE_DIR/peon-ping/config.json"
+        echo ""
+        echo "  For rich desktop notifications (title, subtitle, grouping):"
+        echo "    brew install terminal-notifier"
+        echo "  The plugin auto-detects it at runtime."
+        echo ""
+        if command -v terminal-notifier >/dev/null 2>&1; then
+          echo "  Optional: replace terminal-notifier's default icon with the peon icon:"
+          if [ -f "$LIBEXEC/adapters/opencode/setup-icon.sh" ]; then
+            echo "    bash $LIBEXEC/adapters/opencode/setup-icon.sh"
+          else
+            echo "    bash <(curl -fsSL https://raw.githubusercontent.com/PeonPing/peon-ping/main/adapters/opencode/setup-icon.sh)"
+          fi
+          echo ""
+        fi
         echo "  Restart OpenCode to activate."
         echo ""
       fi
