@@ -372,84 +372,6 @@ class PeonPing < Formula
             cp "$ICON_SRC" "$OPENCODE_PEON_DIR/peon-icon.png"
           fi
 
-          # -----------------------------------------------------------------
-          # Desktop notifications: detect terminal-notifier, replace icon
-          # -----------------------------------------------------------------
-          # The plugin auto-detects terminal-notifier at runtime via `which`.
-          # If it's installed, we replace its bundled icon with peon-icon.png
-          # so notifications show the peon face instead of the Terminal icon.
-          #
-          # Why: terminal-notifier's -appIcon flag uses a deprecated private
-          # API that modern macOS ignores. Replacing Terminal.icns in the app
-          # bundle is the only reliable workaround. Uses sips + iconutil
-          # (built-in macOS tools, no extra deps).
-          NOTIFIER_PATH=""
-          if command -v terminal-notifier >/dev/null 2>&1; then
-            NOTIFIER_PATH=$(command -v terminal-notifier)
-          fi
-
-          if [ -n "$NOTIFIER_PATH" ] && [ -f "$ICON_SRC" ]; then
-            echo ""
-            echo "Detected terminal-notifier — setting up rich notifications..."
-            # Find the .app bundle (Homebrew symlinks bin → app)
-            NOTIFIER_REAL=$(readlink -f "$NOTIFIER_PATH" 2>/dev/null || realpath "$NOTIFIER_PATH" 2>/dev/null || echo "")
-            NOTIFIER_APP=""
-            if [ -n "$NOTIFIER_REAL" ]; then
-              # Walk up from .../terminal-notifier.app/Contents/MacOS/terminal-notifier
-              NOTIFIER_APP=$(echo "$NOTIFIER_REAL" | sed 's|/Contents/MacOS/terminal-notifier$||')
-              if [ ! -d "$NOTIFIER_APP/Contents/Resources" ]; then
-                # Try Homebrew Cellar layout: bin/terminal-notifier is a symlink
-                CELLAR_APP=$(dirname "$NOTIFIER_REAL")/../terminal-notifier.app
-                if [ -d "$CELLAR_APP/Contents/Resources" ]; then
-                  NOTIFIER_APP=$(cd "$CELLAR_APP" && pwd)
-                else
-                  NOTIFIER_APP=""
-                fi
-              fi
-            fi
-
-            ICNS_PATH=""
-            if [ -n "$NOTIFIER_APP" ]; then
-              ICNS_PATH="$NOTIFIER_APP/Contents/Resources/Terminal.icns"
-            fi
-
-            if [ -n "$ICNS_PATH" ] && [ -f "$ICNS_PATH" ]; then
-              # Back up original icon if not already backed up
-              if [ ! -f "${ICNS_PATH}.backup" ]; then
-                cp "$ICNS_PATH" "${ICNS_PATH}.backup"
-              fi
-              # Generate .icns from peon-icon.png using built-in macOS tools
-              ICONSET_DIR=$(mktemp -d)/peon.iconset
-              mkdir -p "$ICONSET_DIR"
-              ICON_OK=true
-              for size in 16 32 64 128 256 512; do
-                sips -z $size $size "$ICON_SRC" --out "$ICONSET_DIR/icon_${size}x${size}.png" >/dev/null 2>&1 || ICON_OK=false
-                sips -z $((size*2)) $((size*2)) "$ICON_SRC" --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" >/dev/null 2>&1 || ICON_OK=false
-              done
-              if [ "$ICON_OK" = true ]; then
-                ICNS_OUT=$(mktemp -d)/peon.icns
-                if iconutil -c icns "$ICONSET_DIR" -o "$ICNS_OUT" 2>/dev/null; then
-                  cp "$ICNS_OUT" "$ICNS_PATH"
-                  touch "$NOTIFIER_APP"
-                  echo "  Peon icon applied to terminal-notifier."
-                  echo "  (Original backed up to ${ICNS_PATH}.backup)"
-                else
-                  echo "  Warning: iconutil failed — notifications will use default Terminal icon."
-                fi
-                rm -rf "$(dirname "$ICNS_OUT")"
-              else
-                echo "  Warning: sips icon generation failed — notifications will use default Terminal icon."
-              fi
-              rm -rf "$(dirname "$ICONSET_DIR")"
-            else
-              echo "  Warning: Could not locate terminal-notifier app bundle."
-              echo "  Notifications will work but use the default Terminal icon."
-            fi
-            HAS_TERMINAL_NOTIFIER=true
-          else
-            HAS_TERMINAL_NOTIFIER=false
-          fi
-
           echo "OpenCode setup complete."
         fi
       fi
@@ -476,18 +398,9 @@ class PeonPing < Formula
         echo "  Plugin:  $OPENCODE_DIR/plugins/peon-ping.ts"
         echo "  Config:  $OPENCODE_DIR/peon-ping/config.json"
         echo ""
-        # Notification status
-        if [ "${HAS_TERMINAL_NOTIFIER:-false}" = true ]; then
-          echo "  Notifications: rich (terminal-notifier)"
-          echo "    Title, subtitle, sound label, custom peon icon, per-project grouping."
-          echo "    Note: after 'brew upgrade terminal-notifier', re-run peon-ping-setup"
-          echo "    to re-apply the peon icon."
-        else
-          echo "  Notifications: basic (osascript)"
-          echo "    For rich notifications with custom peon icon and grouping:"
-          echo "      brew install terminal-notifier"
-          echo "      peon-ping-setup"
-        fi
+        echo "  For rich desktop notifications (custom icon, grouping):"
+        echo "    brew install terminal-notifier"
+        echo "  The plugin auto-detects it at runtime."
         echo ""
         echo "  Restart OpenCode to activate."
         echo ""
@@ -508,10 +421,6 @@ class PeonPing < Formula
         peon-ping-setup              Install 10 default packs
         peon-ping-setup --all        Install all packs
         peon-ping-setup --packs=peon,glados  Install specific packs
-
-      For rich desktop notifications in OpenCode (custom icon, grouping):
-        brew install terminal-notifier
-        peon-ping-setup
 
       After setup, use:
         peon toggle     Mute/unmute sounds
