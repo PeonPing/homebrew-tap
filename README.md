@@ -27,9 +27,9 @@ peon-ping-setup --packs=peon,glados,sc_kerrigan  # Pick specific packs
 After setup, peon-ping plays automatically during Claude Code sessions.
 
 ```bash
-peon --toggle   # Mute/unmute sounds
-peon --status   # Check current status
-peon --help     # See all commands
+peon toggle     # Mute/unmute sounds
+peon status     # Check current status
+peon help       # See all commands
 ```
 
 ## Links
