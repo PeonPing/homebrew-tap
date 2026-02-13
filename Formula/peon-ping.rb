@@ -398,10 +398,34 @@ class PeonPing < Formula
         echo "  Plugin:  $OPENCODE_DIR/plugins/peon-ping.ts"
         echo "  Config:  $OPENCODE_DIR/peon-ping/config.json"
         echo ""
-        echo "  For rich desktop notifications (custom icon, grouping):"
+        echo "  For rich desktop notifications (title, subtitle, grouping):"
         echo "    brew install terminal-notifier"
         echo "  The plugin auto-detects it at runtime."
         echo ""
+        if command -v terminal-notifier >/dev/null 2>&1; then
+          ICON="$OPENCODE_PEON_DIR/peon-icon.png"
+          if [ -f "$ICON" ]; then
+            echo "  Optional: replace terminal-notifier's default icon with the peon icon."
+            echo "  Copy-paste these commands:"
+            echo ""
+            echo "    mkdir -p /tmp/peon.iconset"
+            echo "    for s in 16 32 64 128 256 512; do"
+            echo '      sips -z $s $s "'"$ICON"'" --out "/tmp/peon.iconset/icon_${s}x${s}.png"'
+            echo '      sips -z $((s*2)) $((s*2)) "'"$ICON"'" --out "/tmp/peon.iconset/icon_${s}x${s}@2x.png"'
+            echo "    done"
+            echo '    iconutil -c icns /tmp/peon.iconset -o /tmp/peon.icns'
+            TN_REAL=$(readlink -f "$(command -v terminal-notifier)" 2>/dev/null || realpath "$(command -v terminal-notifier)" 2>/dev/null || echo "")
+            TN_APP=$(echo "$TN_REAL" | sed 's|/Contents/MacOS/terminal-notifier$||')
+            if [ -n "$TN_APP" ] && [ -d "$TN_APP/Contents/Resources" ]; then
+              echo "    cp \"$TN_APP/Contents/Resources/Terminal.icns\" \"$TN_APP/Contents/Resources/Terminal.icns.backup\""
+              echo "    cp /tmp/peon.icns \"$TN_APP/Contents/Resources/Terminal.icns\""
+              echo "    touch \"$TN_APP\""
+            else
+              echo '    # Find your terminal-notifier.app bundle and replace Contents/Resources/Terminal.icns'
+            fi
+            echo ""
+          fi
+        fi
         echo "  Restart OpenCode to activate."
         echo ""
       fi
