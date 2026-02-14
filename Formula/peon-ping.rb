@@ -73,7 +73,8 @@ class PeonPing < Formula
         esac
       done
 
-      LIBEXEC="#{libexec}"
+      # Use the stable opt path so symlinks survive brew upgrades.
+      LIBEXEC="$(brew --prefix peon-ping)/libexec"
       REGISTRY_URL="https://peonping.github.io/registry/index.json"
       PACKS_DIR="$HOME/.openpeon/packs"
 
