@@ -147,6 +147,48 @@ class PeonPing < Formula
         echo "Installing $(echo "$PACKS" | wc -w | tr -d ' ') default packs (use --all for all $(echo "$ALL_PACKS" | wc -l | tr -d ' '))"
       fi
 
+      # URL-encode characters that break raw GitHub URLs (e.g. ? in filenames)
+      urlencode_filename() {
+        local f="$1"
+        f="${f//\\?/%3F}"
+        f="${f//\\!/%21}"
+        f="${f//\\#/%23}"
+        printf '%s' "$f"
+      }
+
+      # Compute sha256 of a file (portable across macOS and Linux)
+      file_sha256() {
+        if command -v shasum &>/dev/null; then
+          shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1
+        elif command -v sha256sum &>/dev/null; then
+          sha256sum "$1" 2>/dev/null | cut -d' ' -f1
+        else
+          python3 -c "import hashlib; print(hashlib.sha256(open('$1','rb').read()).hexdigest())" 2>/dev/null
+        fi
+      }
+
+      # Check if a downloaded sound file matches its stored checksum
+      is_cached_valid() {
+        local filepath="$1" checksums_file="$2" filename="$3"
+        [ -s "$filepath" ] || return 1
+        [ -f "$checksums_file" ] || return 1
+        local stored_hash current_hash
+        stored_hash=$(grep "^$filename " "$checksums_file" 2>/dev/null | cut -d' ' -f2)
+        [ -n "$stored_hash" ] || return 1
+        current_hash=$(file_sha256 "$filepath")
+        [ "$stored_hash" = "$current_hash" ]
+      }
+
+      # Store checksum for a downloaded file
+      store_checksum() {
+        local checksums_file="$1" filename="$2" filepath="$3"
+        local hash
+        hash=$(file_sha256 "$filepath")
+        grep -v "^$filename " "$checksums_file" > "$checksums_file.tmp" 2>/dev/null || true
+        echo "$filename $hash" >> "$checksums_file.tmp"
+        mv "$checksums_file.tmp" "$checksums_file"
+      }
+
       # Download packs to shared CESP path
       for pack in $PACKS; do
         mkdir -p "$PACKS_DIR/$pack/sounds"
@@ -178,6 +220,8 @@ class PeonPing < Formula
           continue
         fi
         manifest="$PACKS_DIR/$pack/openpeon.json"
+        CHECKSUMS_FILE="$PACKS_DIR/$pack/.checksums"
+        touch "$CHECKSUMS_FILE"
         python3 -c "
       import json, os
       m = json.load(open('$manifest'))
@@ -190,7 +234,11 @@ class PeonPing < Formula
                   seen.add(basename)
                   print(basename)
       " | while read -r sfile; do
-          if ! curl -fsSL "$PACK_BASE/sounds/$sfile" -o "$PACKS_DIR/$pack/sounds/$sfile" </dev/null 2>/dev/null; then
+          if is_cached_valid "$PACKS_DIR/$pack/sounds/$sfile" "$CHECKSUMS_FILE" "$sfile"; then
+            : # already downloaded and checksum matches
+          elif curl -fsSL "$PACK_BASE/sounds/$(urlencode_filename "$sfile")" -o "$PACKS_DIR/$pack/sounds/$sfile" </dev/null 2>/dev/null; then
+            store_checksum "$CHECKSUMS_FILE" "$sfile" "$PACKS_DIR/$pack/sounds/$sfile"
+          else
             echo "  Warning: failed to download $pack/sounds/$sfile" >&2
           fi
         done
