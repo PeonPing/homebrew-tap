@@ -68,7 +68,7 @@ class PeonPing < Formula
           --help|-h)
             echo "Usage: peon-ping-setup [--all] [--packs=pack1,pack2,...]"
             echo ""
-            echo "Auto-detects installed IDEs (Claude Code, OpenCode) and sets up"
+            echo "Auto-detects installed IDEs (Claude Code, OpenCode, Windsurf) and sets up"
             echo "peon-ping for each: registers hooks/plugins, downloads sound packs."
             echo ""
             echo "Options:"
@@ -79,6 +79,7 @@ class PeonPing < Formula
             echo "Supported IDEs:"
             echo "  Claude Code  (~/.claude/)"
             echo "  OpenCode     (~/.config/opencode/)"
+            echo "  Windsurf     (~/.codeium/windsurf/)"
             exit 0
             ;;
         esac
@@ -99,18 +100,22 @@ class PeonPing < Formula
       # -----------------------------------------------------------------------
       CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
       OPENCODE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+      WINDSURF_DIR="$HOME/.codeium/windsurf"
 
       HAS_CLAUDE=false
       HAS_OPENCODE=false
+      HAS_WINDSURF=false
       [ -d "$CLAUDE_DIR" ] && HAS_CLAUDE=true
       [ -d "$OPENCODE_DIR" ] && HAS_OPENCODE=true
+      [ -d "$WINDSURF_DIR" ] && HAS_WINDSURF=true
 
-      if [ "$HAS_CLAUDE" = false ] && [ "$HAS_OPENCODE" = false ]; then
+      if [ "$HAS_CLAUDE" = false ] && [ "$HAS_OPENCODE" = false ] && [ "$HAS_WINDSURF" = false ]; then
         echo "Error: No supported IDE found."
         echo ""
         echo "peon-ping supports:"
         echo "  Claude Code  — expected at $CLAUDE_DIR"
         echo "  OpenCode     — expected at $OPENCODE_DIR"
+        echo "  Windsurf     — expected at $WINDSURF_DIR"
         echo ""
         echo "Install one of these IDEs first, then re-run peon-ping-setup."
         exit 1
@@ -123,6 +128,8 @@ class PeonPing < Formula
       [ "$HAS_CLAUDE" = false ] && echo "  [ ] Claude Code (not found)"
       [ "$HAS_OPENCODE" = true ] && echo "  [x] OpenCode ($OPENCODE_DIR)"
       [ "$HAS_OPENCODE" = false ] && echo "  [ ] OpenCode (not found)"
+      [ "$HAS_WINDSURF" = true ] && echo "  [x] Windsurf ($WINDSURF_DIR)"
+      [ "$HAS_WINDSURF" = false ] && echo "  [ ] Windsurf (not found)"
       echo ""
 
       # -----------------------------------------------------------------------
@@ -406,7 +413,70 @@ class PeonPing < Formula
       fi
 
       # -----------------------------------------------------------------------
-      # Phase 6: Summary
+      # Phase 6: Windsurf setup
+      # -----------------------------------------------------------------------
+      if [ "$HAS_WINDSURF" = true ]; then
+        echo ""
+        echo "--- Setting up Windsurf ---"
+        WINDSURF_HOOKS="$WINDSURF_DIR/hooks.json"
+
+        # Windsurf adapter uses peon.sh from Claude install or standalone
+        if [ "$HAS_CLAUDE" = true ]; then
+          ADAPTER_PATH="$CLAUDE_DIR/hooks/peon-ping/adapters/windsurf.sh"
+        else
+          # Standalone Windsurf install: create minimal structure
+          WINDSURF_PEON_DIR="$HOME/.claude/hooks/peon-ping"
+          mkdir -p "$WINDSURF_PEON_DIR/adapters"
+          ln -sf "$LIBEXEC/peon.sh" "$WINDSURF_PEON_DIR/peon.sh"
+          ln -sf "$LIBEXEC/adapters/windsurf.sh" "$WINDSURF_PEON_DIR/adapters/windsurf.sh"
+          ln -sfn "$PACKS_DIR" "$WINDSURF_PEON_DIR/packs"
+          if [ ! -f "$WINDSURF_PEON_DIR/config.json" ]; then
+            cp "$LIBEXEC/config.json" "$WINDSURF_PEON_DIR/config.json"
+          fi
+          ADAPTER_PATH="$WINDSURF_PEON_DIR/adapters/windsurf.sh"
+        fi
+
+        # Register hooks in hooks.json
+        echo "Registering Windsurf hooks..."
+        python3 -c "
+      import json, os
+      hooks_path = '$WINDSURF_HOOKS'
+      adapter_path = '$ADAPTER_PATH'
+      if os.path.exists(hooks_path):
+          with open(hooks_path) as f:
+              config = json.load(f)
+      else:
+          config = {}
+      hooks = config.setdefault('hooks', {})
+      events = {
+          'post_cascade_response': 'post_cascade_response',
+          'pre_user_prompt': 'pre_user_prompt',
+          'post_write_code': 'post_write_code',
+          'post_run_command': 'post_run_command'
+      }
+      for event, arg in events.items():
+          hook_entry = {
+              'command': f'bash {adapter_path} {arg}',
+              'show_output': False
+          }
+          event_hooks = hooks.get(event, [])
+          # Remove existing peon-ping entries
+          event_hooks = [h for h in event_hooks if 'windsurf.sh' not in h.get('command', '')]
+          event_hooks.append(hook_entry)
+          hooks[event] = event_hooks
+      config['hooks'] = hooks
+      os.makedirs(os.path.dirname(hooks_path), exist_ok=True)
+      with open(hooks_path, 'w') as f:
+          json.dump(config, f, indent=2)
+          f.write('\\n')
+      print('Hooks registered for: ' + ', '.join(events.keys()))
+      "
+
+        echo "Windsurf setup complete."
+      fi
+
+      # -----------------------------------------------------------------------
+      # Phase 7: Summary
       # -----------------------------------------------------------------------
       echo ""
       echo "=== Setup complete! ==="
@@ -443,6 +513,20 @@ class PeonPing < Formula
         echo "  Restart OpenCode to activate."
         echo ""
       fi
+      if [ "$HAS_WINDSURF" = true ]; then
+        echo "Windsurf:"
+        echo "  Hooks:   $WINDSURF_DIR/hooks.json"
+        if [ "$HAS_CLAUDE" = true ]; then
+          echo "  Adapter: $CLAUDE_DIR/hooks/peon-ping/adapters/windsurf.sh"
+          echo "  Config:  $CLAUDE_DIR/hooks/peon-ping/config.json"
+        else
+          echo "  Adapter: $HOME/.claude/hooks/peon-ping/adapters/windsurf.sh"
+          echo "  Config:  $HOME/.claude/hooks/peon-ping/config.json"
+        fi
+        echo ""
+        echo "  Restart Windsurf to activate."
+        echo ""
+      fi
       echo "Ready to work!"
     EOS
   end
@@ -452,7 +536,7 @@ class PeonPing < Formula
       To complete setup, run:
         peon-ping-setup
 
-      This auto-detects installed IDEs (Claude Code, OpenCode) and sets
+      This auto-detects installed IDEs (Claude Code, OpenCode, Windsurf) and sets
       up hooks/plugins and downloads sound packs for each.
 
       Options:
