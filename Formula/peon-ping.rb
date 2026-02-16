@@ -29,6 +29,17 @@ class PeonPing < Formula
     # Install skills
     (libexec/"skills/peon-ping-toggle").install "skills/peon-ping-toggle/SKILL.md"
     (libexec/"skills/peon-ping-config").install "skills/peon-ping-config/SKILL.md"
+    (libexec/"skills/peon-ping-use").install "skills/peon-ping-use/SKILL.md" if (buildpath/"skills/peon-ping-use/SKILL.md").exist?
+    (libexec/"skills/peon-ping-log").install "skills/peon-ping-log/SKILL.md" if (buildpath/"skills/peon-ping-log/SKILL.md").exist?
+
+    # Install trainer voice packs
+    if (buildpath/"trainer").exist?
+      (libexec/"trainer").install "trainer/manifest.json"
+      (buildpath/"trainer/sounds").each_child do |subdir|
+        next unless subdir.directory?
+        (libexec/"trainer/sounds"/subdir.basename).install Dir[subdir/"*.mp3"]
+      end
+    end
 
     # Install icon
     (libexec/"docs").install "docs/peon-icon.png" if (buildpath/"docs/peon-icon.png").exist?
@@ -268,12 +279,29 @@ class PeonPing < Formula
         ln -sfn "$PACKS_DIR" "$INSTALL_DIR/packs"
 
         # Install skills
-        SKILL_DIR="$CLAUDE_DIR/skills/peon-ping-toggle"
-        mkdir -p "$SKILL_DIR"
-        ln -sf "$LIBEXEC/skills/peon-ping-toggle/SKILL.md" "$SKILL_DIR/SKILL.md"
-        CONFIG_SKILL_DIR="$CLAUDE_DIR/skills/peon-ping-config"
-        mkdir -p "$CONFIG_SKILL_DIR"
-        ln -sf "$LIBEXEC/skills/peon-ping-config/SKILL.md" "$CONFIG_SKILL_DIR/SKILL.md"
+        for skill_name in peon-ping-toggle peon-ping-config peon-ping-use peon-ping-log; do
+          SKILL_SRC="$LIBEXEC/skills/$skill_name/SKILL.md"
+          if [ -f "$SKILL_SRC" ]; then
+            SKILL_TARGET="$CLAUDE_DIR/skills/$skill_name"
+            mkdir -p "$SKILL_TARGET"
+            ln -sf "$SKILL_SRC" "$SKILL_TARGET/SKILL.md"
+          fi
+        done
+
+        # Install trainer voice packs
+        if [ -d "$LIBEXEC/trainer" ]; then
+          TRAINER_DIR="$INSTALL_DIR/trainer"
+          mkdir -p "$TRAINER_DIR/sounds"
+          ln -sf "$LIBEXEC/trainer/manifest.json" "$TRAINER_DIR/manifest.json"
+          for subdir in "$LIBEXEC/trainer/sounds/"*/; do
+            [ -d "$subdir" ] || continue
+            dirname=$(basename "$subdir")
+            mkdir -p "$TRAINER_DIR/sounds/$dirname"
+            for f in "$subdir"*.mp3; do
+              [ -f "$f" ] && ln -sf "$f" "$TRAINER_DIR/sounds/$dirname/"
+            done
+          done
+        fi
 
         # Register hooks
         echo "Registering Claude Code hooks..."
