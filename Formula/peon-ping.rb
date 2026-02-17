@@ -208,20 +208,29 @@ class PeonPing < Formula
       }
 
       # Download packs to shared CESP path
+      # Security: read registry fields without eval to prevent code injection if registry is compromised/MITM'd
       for pack in $PACKS; do
         mkdir -p "$PACKS_DIR/$pack/sounds"
         SOURCE_REPO="" SOURCE_REF="" SOURCE_PATH=""
         if [ -n "$REGISTRY_JSON" ]; then
-          eval "$(python3 -c "
-      import json, sys
+          IFS=$'\\t' read -r SOURCE_REPO SOURCE_REF SOURCE_PATH <<< "$(python3 -c "
+      import json, sys, re
+      pack_name = sys.argv[1]
       data = json.loads(sys.stdin.read())
       for p in data.get('packs', []):
-          if p['name'] == '$pack':
-              print(f\\"SOURCE_REPO='{p.get('source_repo', '')}'\\" )
-              print(f\\"SOURCE_REF='{p.get('source_ref', 'main')}'\\" )
-              print(f\\"SOURCE_PATH='{p.get('source_path', '')}'\\" )
+          if p.get('name') == pack_name:
+              repo = p.get('source_repo', '') or ''
+              ref = p.get('source_ref', 'main') or 'main'
+              path = p.get('source_path', '') or ''
+              # Allow only safe chars for URL path components (no shell metacharacters)
+              repo = re.sub(r'[^a-zA-Z0-9_./-]', '', repo)
+              ref = re.sub(r'[^a-zA-Z0-9_.-]', '', ref)
+              path = re.sub(r'[^a-zA-Z0-9_./-]', '', path)
+              print(repo, ref, path, sep='\\t')
               break
-      " <<< "$REGISTRY_JSON")"
+      else:
+          print('', 'main', '', sep='\\t')
+      " "$pack" <<< "$REGISTRY_JSON")"
         fi
         if [ -z "$SOURCE_REPO" ]; then
           SOURCE_REPO="$FALLBACK_REPO"
