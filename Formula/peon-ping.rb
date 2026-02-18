@@ -89,11 +89,14 @@ class PeonPing < Formula
             echo "  --packs=p1,p2,...  Install only specified packs"
             echo "  (default)          Install 10 curated English packs"
             echo ""
-            echo "Supported IDEs:"
+            echo "Auto-detected IDEs (hooks registered automatically):"
             echo "  Claude Code  (~/.claude/)"
             echo "  Cursor       (~/.cursor/)"
             echo "  OpenCode     (~/.config/opencode/)"
             echo "  Windsurf     (~/.codeium/windsurf/)"
+            echo ""
+            echo "More IDEs supported via adapters (see peonping.com for setup):"
+            echo "  Kilo CLI, Kiro, Codex, Google Antigravity, OpenClaw"
             exit 0
             ;;
         esac
@@ -753,6 +756,8 @@ class PeonPing < Formula
         echo "  Restart Windsurf to activate."
         echo ""
       fi
+      echo "Other IDEs (Kilo CLI, Kiro, Codex, Antigravity, OpenClaw): see https://peonping.com for adapter setup."
+      echo ""
       echo "Ready to work!"
     EOS
   end
