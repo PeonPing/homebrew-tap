@@ -26,6 +26,19 @@ class PeonPing < Formula
       (libexec/"adapters/opencode").install Dir["adapters/opencode/*"]
     end
 
+    # Install scripts (pack downloader, peon-play Swift source, etc.)
+    if (buildpath/"scripts").exist?
+      (libexec/"scripts").install Dir["scripts/*.sh"]
+      (libexec/"scripts").install Dir["scripts/*.ps1"] if Dir["scripts/*.ps1"].any?
+      (libexec/"scripts").install Dir["scripts/*.js"]  if Dir["scripts/*.js"].any?
+      (libexec/"scripts").install Dir["scripts/*.swift"] if Dir["scripts/*.swift"].any?
+    end
+
+    # Install MCP server
+    if (buildpath/"mcp").exist?
+      (libexec/"mcp").install Dir["mcp/*"]
+    end
+
     # Install skills
     (libexec/"skills/peon-ping-toggle").install "skills/peon-ping-toggle/SKILL.md"
     (libexec/"skills/peon-ping-config").install "skills/peon-ping-config/SKILL.md"
@@ -68,7 +81,7 @@ class PeonPing < Formula
           --help|-h)
             echo "Usage: peon-ping-setup [--all] [--packs=pack1,pack2,...]"
             echo ""
-            echo "Auto-detects installed IDEs (Claude Code, OpenCode, Windsurf) and sets up"
+            echo "Auto-detects installed IDEs (Claude Code, Cursor, OpenCode, Windsurf) and sets up"
             echo "peon-ping for each: registers hooks/plugins, downloads sound packs."
             echo ""
             echo "Options:"
@@ -78,6 +91,7 @@ class PeonPing < Formula
             echo ""
             echo "Supported IDEs:"
             echo "  Claude Code  (~/.claude/)"
+            echo "  Cursor       (~/.cursor/)"
             echo "  OpenCode     (~/.config/opencode/)"
             echo "  Windsurf     (~/.codeium/windsurf/)"
             exit 0
@@ -99,21 +113,26 @@ class PeonPing < Formula
       # Phase 2: Auto-detect installed IDEs
       # -----------------------------------------------------------------------
       CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+      CURSOR_DIR="$HOME/.cursor"
       OPENCODE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
       WINDSURF_DIR="$HOME/.codeium/windsurf"
 
       HAS_CLAUDE=false
+      HAS_CURSOR=false
       HAS_OPENCODE=false
       HAS_WINDSURF=false
-      [ -d "$CLAUDE_DIR" ] && HAS_CLAUDE=true
+      [ -d "$CLAUDE_DIR" ]   && HAS_CLAUDE=true
+      [ -d "$CURSOR_DIR" ]   && HAS_CURSOR=true
       [ -d "$OPENCODE_DIR" ] && HAS_OPENCODE=true
       [ -d "$WINDSURF_DIR" ] && HAS_WINDSURF=true
 
-      if [ "$HAS_CLAUDE" = false ] && [ "$HAS_OPENCODE" = false ] && [ "$HAS_WINDSURF" = false ]; then
+      if [ "$HAS_CLAUDE" = false ] && [ "$HAS_CURSOR" = false ] && \
+         [ "$HAS_OPENCODE" = false ] && [ "$HAS_WINDSURF" = false ]; then
         echo "Error: No supported IDE found."
         echo ""
         echo "peon-ping supports:"
         echo "  Claude Code  — expected at $CLAUDE_DIR"
+        echo "  Cursor       — expected at $CURSOR_DIR"
         echo "  OpenCode     — expected at $OPENCODE_DIR"
         echo "  Windsurf     — expected at $WINDSURF_DIR"
         echo ""
@@ -124,11 +143,13 @@ class PeonPing < Formula
       echo "=== peon-ping setup (brew) ==="
       echo ""
       echo "Detected IDEs:"
-      [ "$HAS_CLAUDE" = true ] && echo "  [x] Claude Code ($CLAUDE_DIR)"
-      [ "$HAS_CLAUDE" = false ] && echo "  [ ] Claude Code (not found)"
-      [ "$HAS_OPENCODE" = true ] && echo "  [x] OpenCode ($OPENCODE_DIR)"
+      [ "$HAS_CLAUDE" = true ]   && echo "  [x] Claude Code ($CLAUDE_DIR)"
+      [ "$HAS_CLAUDE" = false ]  && echo "  [ ] Claude Code (not found)"
+      [ "$HAS_CURSOR" = true ]   && echo "  [x] Cursor ($CURSOR_DIR)"
+      [ "$HAS_CURSOR" = false ]  && echo "  [ ] Cursor (not found)"
+      [ "$HAS_OPENCODE" = true ]  && echo "  [x] OpenCode ($OPENCODE_DIR)"
       [ "$HAS_OPENCODE" = false ] && echo "  [ ] OpenCode (not found)"
-      [ "$HAS_WINDSURF" = true ] && echo "  [x] Windsurf ($WINDSURF_DIR)"
+      [ "$HAS_WINDSURF" = true ]  && echo "  [x] Windsurf ($WINDSURF_DIR)"
       [ "$HAS_WINDSURF" = false ] && echo "  [ ] Windsurf (not found)"
       echo ""
 
@@ -309,6 +330,21 @@ class PeonPing < Formula
             [ -f "$f" ] && ln -sf "$f" "$INSTALL_DIR/adapters/opencode/"
           done
         fi
+        # Link scripts (pack-download.sh, mac-overlay.js, peon-play.swift, etc.)
+        if [ -d "$LIBEXEC/scripts" ]; then
+          mkdir -p "$INSTALL_DIR/scripts"
+          for f in "$LIBEXEC/scripts/"*; do
+            [ -f "$f" ] && ln -sf "$f" "$INSTALL_DIR/scripts/"
+          done
+          chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
+        fi
+        # Link MCP server
+        if [ -d "$LIBEXEC/mcp" ]; then
+          mkdir -p "$INSTALL_DIR/mcp"
+          for f in "$LIBEXEC/mcp/"*; do
+            [ -f "$f" ] && ln -sf "$f" "$INSTALL_DIR/mcp/"
+          done
+        fi
         if [ -f "$LIBEXEC/docs/peon-icon.png" ]; then
           mkdir -p "$INSTALL_DIR/docs"
           ln -sf "$LIBEXEC/docs/peon-icon.png" "$INSTALL_DIR/docs/"
@@ -358,24 +394,52 @@ class PeonPing < Formula
           done
         fi
 
-        # Register hooks
+        # Build peon-play (Sound Effects device routing for macOS)
+        if command -v swiftc &>/dev/null; then
+          SWIFT_SRC="$LIBEXEC/scripts/peon-play.swift"
+          PEON_PLAY="$INSTALL_DIR/scripts/peon-play"
+          if [ -f "$SWIFT_SRC" ] && [ ! -x "$PEON_PLAY" ]; then
+            echo "Building peon-play (Sound Effects device support)..."
+            swiftc -O -o "$PEON_PLAY" "$SWIFT_SRC" \
+              -framework AVFoundation -framework CoreAudio -framework AudioToolbox 2>/dev/null \
+              && echo "  peon-play built successfully" \
+              || echo "  Warning: could not build peon-play, using afplay fallback"
+          fi
+        fi
+
+        # Register Claude Code hooks
         echo "Registering Claude Code hooks..."
         python3 -c "
-      import json, os
+      import json, os, sys
       settings_path = '$SETTINGS'
       hook_cmd = '$INSTALL_DIR/peon.sh'
       if os.path.exists(settings_path):
           with open(settings_path) as f:
-              settings = json.load(f)
+              try:
+                  settings = json.load(f)
+              except Exception:
+                  settings = {}
       else:
           settings = {}
       hooks = settings.setdefault('hooks', {})
-      peon_hook = {'type': 'command', 'command': hook_cmd, 'timeout': 10}
-      peon_entry = {'matcher': '', 'hooks': [peon_hook]}
-      events = ['SessionStart', 'UserPromptSubmit', 'Stop', 'Notification', 'PermissionRequest']
+      peon_hook_sync  = {'type': 'command', 'command': hook_cmd, 'timeout': 10}
+      peon_hook_async = {'type': 'command', 'command': hook_cmd, 'timeout': 10, 'async': True}
+      sync_events = ('SessionStart',)
+      bash_only   = ('PostToolUseFailure',)
+      events = ['SessionStart', 'SessionEnd', 'SubagentStart', 'UserPromptSubmit',
+                'Stop', 'Notification', 'PermissionRequest', 'PostToolUseFailure', 'PreCompact']
       for event in events:
+          hook = peon_hook_sync if event in sync_events else peon_hook_async
+          if event in bash_only:
+              peon_entry = {'matcher': 'Bash', 'hooks': [hook]}
+          else:
+              peon_entry = {'matcher': '', 'hooks': [hook]}
           event_hooks = hooks.get(event, [])
-          event_hooks = [h for h in event_hooks if not any('notify.sh' in hk.get('command', '') or 'peon.sh' in hk.get('command', '') for hk in h.get('hooks', []))]
+          event_hooks = [
+              h for h in event_hooks
+              if not any('peon.sh' in hk.get('command', '') or 'notify.sh' in hk.get('command', '')
+                         for hk in h.get('hooks', []))
+          ]
           event_hooks.append(peon_entry)
           hooks[event] = event_hooks
       settings['hooks'] = hooks
@@ -385,12 +449,108 @@ class PeonPing < Formula
       print('Hooks registered for: ' + ', '.join(events))
       "
 
+        # Register Cursor hooks when both Claude Code and Cursor are installed
+        if [ "$HAS_CURSOR" = true ]; then
+          CURSOR_SETTINGS="$CURSOR_DIR/settings.json"
+          echo "Registering Cursor hooks..."
+          python3 -c "
+      import json, os
+      settings_path = '$CURSOR_SETTINGS'
+      hook_cmd = '$INSTALL_DIR/peon.sh'
+      if os.path.exists(settings_path):
+          with open(settings_path) as f:
+              try:
+                  settings = json.load(f)
+              except Exception:
+                  settings = {}
+      else:
+          settings = {}
+      hooks = settings.setdefault('hooks', {})
+      peon_hook = {'type': 'command', 'command': hook_cmd, 'timeout': 10, 'async': True}
+      peon_entry = {'matcher': '', 'hooks': [peon_hook]}
+      event_hooks = hooks.get('beforeSubmitPrompt', [])
+      event_hooks = [h for h in event_hooks
+                     if not any('peon.sh' in hk.get('command', '') for hk in h.get('hooks', []))]
+      event_hooks.append(peon_entry)
+      hooks['beforeSubmitPrompt'] = event_hooks
+      settings['hooks'] = hooks
+      with open(settings_path, 'w') as f:
+          json.dump(settings, f, indent=2)
+          f.write('\\n')
+      print('Cursor beforeSubmitPrompt hook registered')
+      "
+        fi
+
         # Initialize state
         if [ "$CLAUDE_UPDATING" = false ]; then
           echo '{}' > "$INSTALL_DIR/.state.json"
         fi
 
         echo "Claude Code setup complete."
+      fi
+
+      # -----------------------------------------------------------------------
+      # Phase 4b: Cursor-only setup (no Claude Code)
+      # -----------------------------------------------------------------------
+      if [ "$HAS_CURSOR" = true ] && [ "$HAS_CLAUDE" = false ]; then
+        echo ""
+        echo "--- Setting up Cursor (standalone) ---"
+        # Install to ~/.claude/hooks/peon-ping so peon.sh has a stable home
+        INSTALL_DIR="$HOME/.claude/hooks/peon-ping"
+        CURSOR_SETTINGS="$CURSOR_DIR/settings.json"
+
+        mkdir -p "$INSTALL_DIR"
+        ln -sf "$LIBEXEC/peon.sh"      "$INSTALL_DIR/peon.sh"
+        ln -sf "$LIBEXEC/VERSION"      "$INSTALL_DIR/VERSION"
+        ln -sf "$LIBEXEC/uninstall.sh" "$INSTALL_DIR/uninstall.sh"
+        [ -f "$LIBEXEC/relay.sh" ] && ln -sf "$LIBEXEC/relay.sh" "$INSTALL_DIR/relay.sh"
+        mkdir -p "$INSTALL_DIR/adapters"
+        for f in "$LIBEXEC/adapters/"*.sh; do
+          [ -f "$f" ] && ln -sf "$f" "$INSTALL_DIR/adapters/"
+        done
+        if [ -d "$LIBEXEC/scripts" ]; then
+          mkdir -p "$INSTALL_DIR/scripts"
+          for f in "$LIBEXEC/scripts/"*; do
+            [ -f "$f" ] && ln -sf "$f" "$INSTALL_DIR/scripts/"
+          done
+          chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
+        fi
+        if [ -f "$LIBEXEC/docs/peon-icon.png" ]; then
+          mkdir -p "$INSTALL_DIR/docs"
+          ln -sf "$LIBEXEC/docs/peon-icon.png" "$INSTALL_DIR/docs/"
+        fi
+        [ -f "$INSTALL_DIR/config.json" ] || cp "$LIBEXEC/config.json" "$INSTALL_DIR/config.json"
+        ln -sfn "$PACKS_DIR" "$INSTALL_DIR/packs"
+
+        echo "Registering Cursor hooks..."
+        python3 -c "
+      import json, os
+      settings_path = '$CURSOR_SETTINGS'
+      hook_cmd = '$INSTALL_DIR/peon.sh'
+      if os.path.exists(settings_path):
+          with open(settings_path) as f:
+              try:
+                  settings = json.load(f)
+              except Exception:
+                  settings = {}
+      else:
+          settings = {}
+      hooks = settings.setdefault('hooks', {})
+      peon_hook = {'type': 'command', 'command': hook_cmd, 'timeout': 10, 'async': True}
+      peon_entry = {'matcher': '', 'hooks': [peon_hook]}
+      event_hooks = hooks.get('beforeSubmitPrompt', [])
+      event_hooks = [h for h in event_hooks
+                     if not any('peon.sh' in hk.get('command', '') for hk in h.get('hooks', []))]
+      event_hooks.append(peon_entry)
+      hooks['beforeSubmitPrompt'] = event_hooks
+      settings['hooks'] = hooks
+      with open(settings_path, 'w') as f:
+          json.dump(settings, f, indent=2)
+          f.write('\\n')
+      print('Cursor beforeSubmitPrompt hook registered')
+      "
+        echo '{}' > "$INSTALL_DIR/.state.json" 2>/dev/null || true
+        echo "Cursor standalone setup complete."
       fi
 
       # -----------------------------------------------------------------------
@@ -534,10 +694,19 @@ class PeonPing < Formula
       if [ "$HAS_CLAUDE" = true ]; then
         echo "Claude Code:"
         echo "  Config:  $CLAUDE_DIR/hooks/peon-ping/config.json"
+        echo "  Skills:  /peon-ping-toggle, /peon-ping-config, /peon-ping-use, /peon-ping-log"
         echo "  Controls:"
         echo "    /peon-ping-toggle  — toggle sounds in Claude Code"
         echo "    peon toggle        — toggle from any terminal"
         echo "    peon status        — check current status"
+        echo ""
+        echo "  MCP server (lets agent choose sounds):"
+        echo "    node $CLAUDE_DIR/hooks/peon-ping/mcp/peon-mcp.js"
+        echo "    Add to .mcp.json as stdio MCP server"
+        echo ""
+      fi
+      if [ "$HAS_CURSOR" = true ]; then
+        echo "Cursor: hooks registered via beforeSubmitPrompt"
         echo ""
       fi
       if [ "$HAS_OPENCODE" = true ]; then
@@ -584,7 +753,7 @@ class PeonPing < Formula
       To complete setup, run:
         peon-ping-setup
 
-      This auto-detects installed IDEs (Claude Code, OpenCode, Windsurf) and sets
+      Auto-detects installed IDEs (Claude Code, Cursor, OpenCode, Windsurf) and sets
       up hooks/plugins and downloads sound packs for each.
 
       Options:
