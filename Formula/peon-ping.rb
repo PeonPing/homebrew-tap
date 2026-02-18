@@ -96,7 +96,7 @@ class PeonPing < Formula
             echo "  Windsurf     (~/.codeium/windsurf/)"
             echo ""
             echo "More IDEs supported via adapters (see peonping.com for setup):"
-            echo "  Kilo CLI, Kiro, Codex, Google Antigravity, OpenClaw"
+            echo "  GitHub Copilot, Kilo CLI, Kiro, Codex, Google Antigravity, OpenClaw"
             exit 0
             ;;
         esac
