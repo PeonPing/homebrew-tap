@@ -763,70 +763,51 @@ class PeonPing < Formula
   end
 
   def post_install
-    # Re-link core files so symlinks survive brew upgrade.
-    # peon-ping-setup creates symlinks into libexec; after an upgrade the old
-    # cellar version is removed, breaking them.  This re-links using the stable
-    # opt path (#{libexec}) which Homebrew keeps current across versions.
-    #
-    # Files may have com.apple.provenance xattr which prevents Pathname#unlink
-    # in Homebrew's sandbox.  Use system("rm", "-f", ...) as a fallback.
+    # Re-link broken symlinks after brew upgrade.
+    # peon-ping-setup creates symlinks into libexec; if they were created
+    # pointing to a Cellar path (old installs), the upgrade removes that
+    # version and breaks them.  This only fixes BROKEN symlinks — working
+    # symlinks (including those pointing to a local repo) are left alone.
+    # This avoids EPERM errors from macOS provenance xattr.
     install_dir = Pathname.new("#{Dir.home}/.claude/hooks/peon-ping")
     return unless install_dir.directory?
 
-    # Helper: remove a file even if it has macOS provenance xattr
-    safe_unlink = lambda do |path|
+    # Helper: only re-link if the symlink is dangling (target gone)
+    fix_if_broken = lambda do |src, dst|
+      return unless dst.symlink? && !dst.exist? # dangling symlink
       begin
-        path.unlink
+        dst.unlink
+        dst.make_symlink(src)
       rescue Errno::EPERM
-        system("rm", "-f", path.to_s)
+        # macOS provenance xattr — can't fix in Homebrew sandbox, skip
       end
     end
 
-    # Helper: remove then symlink
-    force_symlink = lambda do |src, dst|
-      safe_unlink.call(dst) if dst.symlink? || dst.exist?
-      dst.make_symlink(src)
-    end
-
     # Core files
-    {
-      "peon.sh"          => install_dir/"peon.sh",
-      "VERSION"          => install_dir/"VERSION",
-      "uninstall.sh"     => install_dir/"uninstall.sh",
-      "config.json"      => install_dir/"config.json",
-    }.each do |src, dst|
-      next unless (libexec/src).exist?
-      # Don't overwrite config.json — it contains user settings
-      next if src == "config.json" && dst.exist?
-      force_symlink.call(libexec/src, dst)
+    %w[peon.sh VERSION uninstall.sh].each do |name|
+      fix_if_broken.call(libexec/name, install_dir/name)
     end
 
-    # Scripts directory (skip compiled binaries like peon-play)
+    # Scripts directory
     scripts_dir = install_dir/"scripts"
     if (libexec/"scripts").directory? && scripts_dir.directory?
       (libexec/"scripts").children.each do |src|
         next unless src.file?
-        dst = scripts_dir/src.basename
-        # Skip compiled binaries — only re-link source files
-        next if dst.exist? && !dst.symlink? && dst.executable?
-        force_symlink.call(src, dst)
+        fix_if_broken.call(src, scripts_dir/src.basename)
       end
     end
 
     # Icon
     icon_src = libexec/"docs/peon-icon.png"
     icon_dst = install_dir/"docs/peon-icon.png"
-    if icon_src.exist? && icon_dst.parent.directory?
-      force_symlink.call(icon_src, icon_dst)
-    end
+    fix_if_broken.call(icon_src, icon_dst) if icon_dst.parent.directory?
 
     # Adapters
     adapters_dir = install_dir/"adapters"
     if (libexec/"adapters").directory? && adapters_dir.directory?
       (libexec/"adapters").children.each do |src|
         next unless src.file?
-        dst = adapters_dir/src.basename
-        force_symlink.call(src, dst)
+        fix_if_broken.call(src, adapters_dir/src.basename)
       end
     end
 
@@ -836,7 +817,7 @@ class PeonPing < Formula
       src = libexec/"skills/#{skill}/SKILL.md"
       dst = skills_base/skill/"SKILL.md"
       next unless src.exist? && dst.parent.directory?
-      force_symlink.call(src, dst)
+      fix_if_broken.call(src, dst)
     end
   end
 
