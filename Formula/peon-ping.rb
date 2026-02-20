@@ -762,6 +762,69 @@ class PeonPing < Formula
     EOS
   end
 
+  def post_install
+    # Re-link core files so symlinks survive brew upgrade.
+    # peon-ping-setup creates symlinks into libexec; after an upgrade the old
+    # cellar version is removed, breaking them.  This re-links using the stable
+    # opt path (#{libexec}) which Homebrew keeps current across versions.
+    install_dir = Pathname.new("#{Dir.home}/.claude/hooks/peon-ping")
+    return unless install_dir.directory?
+
+    # Core files
+    {
+      "peon.sh"          => install_dir/"peon.sh",
+      "VERSION"          => install_dir/"VERSION",
+      "uninstall.sh"     => install_dir/"uninstall.sh",
+      "config.json"      => install_dir/"config.json",
+    }.each do |src, dst|
+      next unless (libexec/src).exist?
+      # Don't overwrite config.json — it contains user settings
+      next if src == "config.json" && dst.exist?
+      dst.unlink if dst.symlink? || (dst.exist? && src != "config.json")
+      dst.make_symlink(libexec/src)
+    end
+
+    # Scripts directory
+    scripts_dir = install_dir/"scripts"
+    if (libexec/"scripts").directory? && scripts_dir.directory?
+      (libexec/"scripts").children.each do |src|
+        next unless src.file?
+        dst = scripts_dir/src.basename
+        dst.unlink if dst.symlink?
+        dst.make_symlink(src)
+      end
+    end
+
+    # Icon
+    icon_src = libexec/"docs/peon-icon.png"
+    icon_dst = install_dir/"docs/peon-icon.png"
+    if icon_src.exist? && icon_dst.parent.directory?
+      icon_dst.unlink if icon_dst.symlink?
+      icon_dst.make_symlink(icon_src)
+    end
+
+    # Adapters
+    adapters_dir = install_dir/"adapters"
+    if (libexec/"adapters").directory? && adapters_dir.directory?
+      (libexec/"adapters").children.each do |src|
+        next unless src.file?
+        dst = adapters_dir/src.basename
+        dst.unlink if dst.symlink?
+        dst.make_symlink(src)
+      end
+    end
+
+    # Skills
+    skills_base = Pathname.new("#{Dir.home}/.claude/skills")
+    %w[peon-ping-toggle peon-ping-config peon-ping-use peon-ping-log].each do |skill|
+      src = libexec/"skills/#{skill}/SKILL.md"
+      dst = skills_base/skill/"SKILL.md"
+      next unless src.exist? && dst.parent.directory?
+      dst.unlink if dst.symlink?
+      dst.make_symlink(src)
+    end
+  end
+
   def caveats
     <<~EOS
       To complete setup, run:
