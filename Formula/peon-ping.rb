@@ -784,13 +784,15 @@ class PeonPing < Formula
       dst.make_symlink(libexec/src)
     end
 
-    # Scripts directory
+    # Scripts directory (skip compiled binaries like peon-play)
     scripts_dir = install_dir/"scripts"
     if (libexec/"scripts").directory? && scripts_dir.directory?
       (libexec/"scripts").children.each do |src|
         next unless src.file?
         dst = scripts_dir/src.basename
-        dst.unlink if dst.symlink?
+        # Skip compiled binaries — only re-link source files
+        next if dst.exist? && !dst.symlink? && dst.executable?
+        dst.unlink if dst.symlink? || dst.exist?
         dst.make_symlink(src)
       end
     end
@@ -799,7 +801,7 @@ class PeonPing < Formula
     icon_src = libexec/"docs/peon-icon.png"
     icon_dst = install_dir/"docs/peon-icon.png"
     if icon_src.exist? && icon_dst.parent.directory?
-      icon_dst.unlink if icon_dst.symlink?
+      icon_dst.unlink if icon_dst.symlink? || icon_dst.exist?
       icon_dst.make_symlink(icon_src)
     end
 
@@ -809,7 +811,7 @@ class PeonPing < Formula
       (libexec/"adapters").children.each do |src|
         next unless src.file?
         dst = adapters_dir/src.basename
-        dst.unlink if dst.symlink?
+        dst.unlink if dst.symlink? || dst.exist?
         dst.make_symlink(src)
       end
     end
@@ -820,7 +822,7 @@ class PeonPing < Formula
       src = libexec/"skills/#{skill}/SKILL.md"
       dst = skills_base/skill/"SKILL.md"
       next unless src.exist? && dst.parent.directory?
-      dst.unlink if dst.symlink?
+      dst.unlink if dst.symlink? || dst.exist?
       dst.make_symlink(src)
     end
   end
