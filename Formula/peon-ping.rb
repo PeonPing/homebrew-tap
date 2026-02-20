@@ -87,7 +87,7 @@ class PeonPing < Formula
             echo "Options:"
             echo "  --all              Install all available packs"
             echo "  --packs=p1,p2,...  Install only specified packs"
-            echo "  (default)          Install 10 curated English packs"
+            echo "  (default)          Install 5 curated English packs"
             echo ""
             echo "Auto-detected IDEs (hooks registered automatically):"
             echo "  Claude Code  (~/.claude/)"
@@ -107,7 +107,7 @@ class PeonPing < Formula
       REGISTRY_URL="https://peonping.github.io/registry/index.json"
       PACKS_DIR="$HOME/.openpeon/packs"
 
-      DEFAULT_PACKS="peon peasant glados sc_kerrigan sc_battlecruiser ra2_kirov dota2_axe duke_nukem tf2_engineer hd2_helldiver"
+      DEFAULT_PACKS="peon peasant sc_kerrigan sc_battlecruiser glados"
       FALLBACK_PACKS="acolyte_de acolyte_ru aoe2 aom_greek brewmaster_ru dota2_axe duke_nukem glados hd2_helldiver molag_bal murloc ocarina_of_time peon peon_cz peon_de peon_es peon_fr peon_pl peon_ru peasant peasant_cz peasant_es peasant_fr peasant_ru ra2_kirov ra2_soviet_engineer ra_soviet rick sc_battlecruiser sc_firebat sc_kerrigan sc_medic sc_scv sc_tank sc_terran sc_vessel sheogorath sopranos tf2_engineer wc2_peasant"
       FALLBACK_REPO="PeonPing/og-packs"
       FALLBACK_REF="v1.1.0"
@@ -834,7 +834,7 @@ class PeonPing < Formula
       up hooks/plugins and downloads sound packs for each.
 
       Options:
-        peon-ping-setup              Install 10 default packs
+        peon-ping-setup              Install 5 default packs
         peon-ping-setup --all        Install all packs
         peon-ping-setup --packs=peon,glados  Install specific packs
 
