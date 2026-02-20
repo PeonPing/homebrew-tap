@@ -767,8 +767,26 @@ class PeonPing < Formula
     # peon-ping-setup creates symlinks into libexec; after an upgrade the old
     # cellar version is removed, breaking them.  This re-links using the stable
     # opt path (#{libexec}) which Homebrew keeps current across versions.
+    #
+    # Files may have com.apple.provenance xattr which prevents Pathname#unlink
+    # in Homebrew's sandbox.  Use system("rm", "-f", ...) as a fallback.
     install_dir = Pathname.new("#{Dir.home}/.claude/hooks/peon-ping")
     return unless install_dir.directory?
+
+    # Helper: remove a file even if it has macOS provenance xattr
+    safe_unlink = lambda do |path|
+      begin
+        path.unlink
+      rescue Errno::EPERM
+        system("rm", "-f", path.to_s)
+      end
+    end
+
+    # Helper: remove then symlink
+    force_symlink = lambda do |src, dst|
+      safe_unlink.call(dst) if dst.symlink? || dst.exist?
+      dst.make_symlink(src)
+    end
 
     # Core files
     {
@@ -780,8 +798,7 @@ class PeonPing < Formula
       next unless (libexec/src).exist?
       # Don't overwrite config.json — it contains user settings
       next if src == "config.json" && dst.exist?
-      dst.unlink if dst.symlink? || (dst.exist? && src != "config.json")
-      dst.make_symlink(libexec/src)
+      force_symlink.call(libexec/src, dst)
     end
 
     # Scripts directory (skip compiled binaries like peon-play)
@@ -792,8 +809,7 @@ class PeonPing < Formula
         dst = scripts_dir/src.basename
         # Skip compiled binaries — only re-link source files
         next if dst.exist? && !dst.symlink? && dst.executable?
-        dst.unlink if dst.symlink? || dst.exist?
-        dst.make_symlink(src)
+        force_symlink.call(src, dst)
       end
     end
 
@@ -801,8 +817,7 @@ class PeonPing < Formula
     icon_src = libexec/"docs/peon-icon.png"
     icon_dst = install_dir/"docs/peon-icon.png"
     if icon_src.exist? && icon_dst.parent.directory?
-      icon_dst.unlink if icon_dst.symlink? || icon_dst.exist?
-      icon_dst.make_symlink(icon_src)
+      force_symlink.call(icon_src, icon_dst)
     end
 
     # Adapters
@@ -811,8 +826,7 @@ class PeonPing < Formula
       (libexec/"adapters").children.each do |src|
         next unless src.file?
         dst = adapters_dir/src.basename
-        dst.unlink if dst.symlink? || dst.exist?
-        dst.make_symlink(src)
+        force_symlink.call(src, dst)
       end
     end
 
@@ -822,8 +836,7 @@ class PeonPing < Formula
       src = libexec/"skills/#{skill}/SKILL.md"
       dst = skills_base/skill/"SKILL.md"
       next unless src.exist? && dst.parent.directory?
-      dst.unlink if dst.symlink? || dst.exist?
-      dst.make_symlink(src)
+      force_symlink.call(src, dst)
     end
   end
 
