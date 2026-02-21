@@ -18,7 +18,7 @@ peon-ping-setup
 
 ```bash
 peon-ping-setup              # Install 10 default packs
-peon-ping-setup --all        # Install all 43+ packs
+peon-ping-setup --all        # Install all 90+ packs
 peon-ping-setup --packs=peon,glados,sc_kerrigan  # Pick specific packs
 ```
 
