@@ -90,10 +90,11 @@ class PeonPing < Formula
             echo "  (default)          Install 5 curated English packs"
             echo ""
             echo "Auto-detected IDEs (hooks registered automatically):"
-            echo "  Claude Code  (~/.claude/)"
-            echo "  Cursor       (~/.cursor/)"
-            echo "  OpenCode     (~/.config/opencode/)"
-            echo "  Windsurf     (~/.codeium/windsurf/)"
+            echo "  Claude Code      (~/.claude/)"
+            echo "  Cursor           (~/.cursor/)"
+            echo "  OpenCode         (~/.config/opencode/)"
+            echo "  Windsurf         (~/.codeium/windsurf/)"
+            echo "  deepagents-cli   (~/.deepagents/)"
             echo ""
             echo "More IDEs supported via adapters (see peonping.com for setup):"
             echo "  Gemini CLI, GitHub Copilot, Kilo CLI, Kiro, Codex, Google Antigravity, OpenClaw"
@@ -119,25 +120,30 @@ class PeonPing < Formula
       CURSOR_DIR="$HOME/.cursor"
       OPENCODE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
       WINDSURF_DIR="$HOME/.codeium/windsurf"
+      DEEPAGENTS_DIR="$HOME/.deepagents"
 
       HAS_CLAUDE=false
       HAS_CURSOR=false
       HAS_OPENCODE=false
       HAS_WINDSURF=false
-      [ -d "$CLAUDE_DIR" ]   && HAS_CLAUDE=true
-      [ -d "$CURSOR_DIR" ]   && HAS_CURSOR=true
-      [ -d "$OPENCODE_DIR" ] && HAS_OPENCODE=true
-      [ -d "$WINDSURF_DIR" ] && HAS_WINDSURF=true
+      HAS_DEEPAGENTS=false
+      [ -d "$CLAUDE_DIR" ]      && HAS_CLAUDE=true
+      [ -d "$CURSOR_DIR" ]      && HAS_CURSOR=true
+      [ -d "$OPENCODE_DIR" ]    && HAS_OPENCODE=true
+      [ -d "$WINDSURF_DIR" ]    && HAS_WINDSURF=true
+      [ -d "$DEEPAGENTS_DIR" ]  && HAS_DEEPAGENTS=true
 
       if [ "$HAS_CLAUDE" = false ] && [ "$HAS_CURSOR" = false ] && \
-         [ "$HAS_OPENCODE" = false ] && [ "$HAS_WINDSURF" = false ]; then
+         [ "$HAS_OPENCODE" = false ] && [ "$HAS_WINDSURF" = false ] && \
+         [ "$HAS_DEEPAGENTS" = false ]; then
         echo "Error: No supported IDE found."
         echo ""
         echo "peon-ping supports:"
-        echo "  Claude Code  — expected at $CLAUDE_DIR"
-        echo "  Cursor       — expected at $CURSOR_DIR"
-        echo "  OpenCode     — expected at $OPENCODE_DIR"
-        echo "  Windsurf     — expected at $WINDSURF_DIR"
+        echo "  Claude Code      — expected at $CLAUDE_DIR"
+        echo "  Cursor           — expected at $CURSOR_DIR"
+        echo "  OpenCode         — expected at $OPENCODE_DIR"
+        echo "  Windsurf         — expected at $WINDSURF_DIR"
+        echo "  deepagents-cli   — expected at $DEEPAGENTS_DIR"
         echo ""
         echo "Install one of these IDEs first, then re-run peon-ping-setup."
         exit 1
@@ -146,14 +152,16 @@ class PeonPing < Formula
       echo "=== peon-ping setup (brew) ==="
       echo ""
       echo "Detected IDEs:"
-      [ "$HAS_CLAUDE" = true ]   && echo "  [x] Claude Code ($CLAUDE_DIR)"
-      [ "$HAS_CLAUDE" = false ]  && echo "  [ ] Claude Code (not found)"
-      [ "$HAS_CURSOR" = true ]   && echo "  [x] Cursor ($CURSOR_DIR)"
-      [ "$HAS_CURSOR" = false ]  && echo "  [ ] Cursor (not found)"
-      [ "$HAS_OPENCODE" = true ]  && echo "  [x] OpenCode ($OPENCODE_DIR)"
-      [ "$HAS_OPENCODE" = false ] && echo "  [ ] OpenCode (not found)"
-      [ "$HAS_WINDSURF" = true ]  && echo "  [x] Windsurf ($WINDSURF_DIR)"
-      [ "$HAS_WINDSURF" = false ] && echo "  [ ] Windsurf (not found)"
+      [ "$HAS_CLAUDE" = true ]      && echo "  [x] Claude Code ($CLAUDE_DIR)"
+      [ "$HAS_CLAUDE" = false ]     && echo "  [ ] Claude Code (not found)"
+      [ "$HAS_CURSOR" = true ]      && echo "  [x] Cursor ($CURSOR_DIR)"
+      [ "$HAS_CURSOR" = false ]     && echo "  [ ] Cursor (not found)"
+      [ "$HAS_OPENCODE" = true ]    && echo "  [x] OpenCode ($OPENCODE_DIR)"
+      [ "$HAS_OPENCODE" = false ]   && echo "  [ ] OpenCode (not found)"
+      [ "$HAS_WINDSURF" = true ]    && echo "  [x] Windsurf ($WINDSURF_DIR)"
+      [ "$HAS_WINDSURF" = false ]   && echo "  [ ] Windsurf (not found)"
+      [ "$HAS_DEEPAGENTS" = true ]  && echo "  [x] deepagents-cli ($DEEPAGENTS_DIR)"
+      [ "$HAS_DEEPAGENTS" = false ] && echo "  [ ] deepagents-cli (not found)"
       echo ""
 
       # -----------------------------------------------------------------------
@@ -696,7 +704,59 @@ class PeonPing < Formula
       fi
 
       # -----------------------------------------------------------------------
-      # Phase 7: Summary
+      # Phase 7: deepagents-cli setup
+      # -----------------------------------------------------------------------
+      DEEPAGENTS_HOOKS_FILE="$DEEPAGENTS_DIR/hooks.json"
+
+      if [ "$HAS_DEEPAGENTS" = true ]; then
+        echo ""
+        echo "--- Setting up deepagents-cli ---"
+
+        # Use the adapter from Claude install dir or Homebrew libexec
+        if [ "$HAS_CLAUDE" = true ]; then
+          DA_ADAPTER="$CLAUDE_DIR/hooks/peon-ping/adapters/deepagents.sh"
+        else
+          DA_ADAPTER="$LIBEXEC/adapters/deepagents.sh"
+        fi
+
+        echo "Registering deepagents-cli hooks..."
+        python3 -c "
+      import json, os
+      hooks_file = '$DEEPAGENTS_HOOKS_FILE'
+      adapter_cmd = '$DA_ADAPTER'
+      if os.path.exists(hooks_file):
+          with open(hooks_file) as f:
+              try:
+                  data = json.load(f)
+              except Exception:
+                  data = {}
+      else:
+          data = {}
+      if 'hooks' not in data:
+          data['hooks'] = []
+      # Remove existing peon-ping entries
+      data['hooks'] = [
+          h for h in data['hooks']
+          if not any('peon-ping' in str(c) for c in (h.get('command') or []))
+      ]
+      events = ['session.start', 'session.end', 'task.complete', 'input.required',
+                'task.error', 'tool.error', 'user.prompt', 'permission.request', 'compact']
+      data['hooks'].append({
+          'command': ['bash', adapter_cmd],
+          'events': events
+      })
+      os.makedirs(os.path.dirname(hooks_file), exist_ok=True)
+      with open(hooks_file, 'w') as f:
+          json.dump(data, f, indent=2)
+          f.write('\\n')
+      print('Hooks registered for: ' + ', '.join(events))
+      "
+
+        echo "deepagents-cli setup complete."
+      fi
+
+      # -----------------------------------------------------------------------
+      # Phase 8: Summary
       # -----------------------------------------------------------------------
       echo ""
       echo "=== Setup complete! ==="
@@ -754,6 +814,11 @@ class PeonPing < Formula
         fi
         echo ""
         echo "  Restart Windsurf to activate."
+        echo ""
+      fi
+      if [ "$HAS_DEEPAGENTS" = true ]; then
+        echo "deepagents-cli:"
+        echo "  Hooks:   $DEEPAGENTS_HOOKS_FILE"
         echo ""
       fi
       echo "Other IDEs (Kilo CLI, Kiro, Codex, Antigravity, OpenClaw): see https://peonping.com for adapter setup."
@@ -826,8 +891,8 @@ class PeonPing < Formula
       To complete setup, run:
         peon-ping-setup
 
-      Auto-detects installed IDEs (Claude Code, Cursor, OpenCode, Windsurf) and sets
-      up hooks/plugins and downloads sound packs for each.
+      Auto-detects installed IDEs (Claude Code, Cursor, OpenCode, Windsurf,
+      deepagents-cli) and sets up hooks/plugins and downloads sound packs for each.
 
       Options:
         peon-ping-setup              Install 5 default packs
