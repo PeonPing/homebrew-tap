@@ -95,6 +95,7 @@ class PeonPing < Formula
             echo "  OpenCode         (~/.config/opencode/)"
             echo "  Windsurf         (~/.codeium/windsurf/)"
             echo "  deepagents-cli   (~/.deepagents/)"
+            echo "  Rovo Dev CLI     (~/.rovodev/)"
             echo ""
             echo "More IDEs supported via adapters (see peonping.com for setup):"
             echo "  Gemini CLI, GitHub Copilot, Kilo CLI, Kiro, Codex, Google Antigravity, OpenClaw"
@@ -121,21 +122,24 @@ class PeonPing < Formula
       OPENCODE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
       WINDSURF_DIR="$HOME/.codeium/windsurf"
       DEEPAGENTS_DIR="$HOME/.deepagents"
+      ROVODEV_DIR="$HOME/.rovodev"
 
       HAS_CLAUDE=false
       HAS_CURSOR=false
       HAS_OPENCODE=false
       HAS_WINDSURF=false
       HAS_DEEPAGENTS=false
+      HAS_ROVODEV=false
       [ -d "$CLAUDE_DIR" ]      && HAS_CLAUDE=true
       [ -d "$CURSOR_DIR" ]      && HAS_CURSOR=true
       [ -d "$OPENCODE_DIR" ]    && HAS_OPENCODE=true
       [ -d "$WINDSURF_DIR" ]    && HAS_WINDSURF=true
       [ -d "$DEEPAGENTS_DIR" ]  && HAS_DEEPAGENTS=true
+      [ -d "$ROVODEV_DIR" ]     && HAS_ROVODEV=true
 
       if [ "$HAS_CLAUDE" = false ] && [ "$HAS_CURSOR" = false ] && \
          [ "$HAS_OPENCODE" = false ] && [ "$HAS_WINDSURF" = false ] && \
-         [ "$HAS_DEEPAGENTS" = false ]; then
+         [ "$HAS_DEEPAGENTS" = false ] && [ "$HAS_ROVODEV" = false ]; then
         echo "Error: No supported IDE found."
         echo ""
         echo "peon-ping supports:"
@@ -144,6 +148,7 @@ class PeonPing < Formula
         echo "  OpenCode         — expected at $OPENCODE_DIR"
         echo "  Windsurf         — expected at $WINDSURF_DIR"
         echo "  deepagents-cli   — expected at $DEEPAGENTS_DIR"
+        echo "  Rovo Dev CLI     — expected at $ROVODEV_DIR"
         echo ""
         echo "Install one of these IDEs first, then re-run peon-ping-setup."
         exit 1
@@ -162,6 +167,8 @@ class PeonPing < Formula
       [ "$HAS_WINDSURF" = false ]   && echo "  [ ] Windsurf (not found)"
       [ "$HAS_DEEPAGENTS" = true ]  && echo "  [x] deepagents-cli ($DEEPAGENTS_DIR)"
       [ "$HAS_DEEPAGENTS" = false ] && echo "  [ ] deepagents-cli (not found)"
+      [ "$HAS_ROVODEV" = true ]     && echo "  [x] Rovo Dev CLI ($ROVODEV_DIR)"
+      [ "$HAS_ROVODEV" = false ]    && echo "  [ ] Rovo Dev CLI (not found)"
       echo ""
 
       # -----------------------------------------------------------------------
@@ -756,7 +763,136 @@ class PeonPing < Formula
       fi
 
       # -----------------------------------------------------------------------
-      # Phase 8: Summary
+      # Phase 8: Rovo Dev CLI setup
+      # -----------------------------------------------------------------------
+      if [ "$HAS_ROVODEV" = true ]; then
+        echo ""
+        echo "--- Setting up Rovo Dev CLI ---"
+
+        # Use the adapter from Claude install dir or Homebrew libexec
+        if [ "$HAS_CLAUDE" = true ]; then
+          RD_ADAPTER="$CLAUDE_DIR/hooks/peon-ping/adapters/rovodev.sh"
+        else
+          RD_ADAPTER="$LIBEXEC/adapters/rovodev.sh"
+        fi
+
+        # Find config file (config.yml or config.yaml)
+        ROVODEV_CONFIG="$ROVODEV_DIR/config.yml"
+        [ ! -f "$ROVODEV_CONFIG" ] && [ -f "$ROVODEV_DIR/config.yaml" ] && ROVODEV_CONFIG="$ROVODEV_DIR/config.yaml"
+
+        echo "Registering Rovo Dev CLI event hooks..."
+        if [ -f "$ROVODEV_CONFIG" ]; then
+          python3 -c "
+import re, sys
+
+config_path = '$ROVODEV_CONFIG'
+adapter_path = '$RD_ADAPTER'
+
+with open(config_path, 'r') as f:
+    content = f.read()
+
+# Skip if peon-ping adapter is already referenced
+if 'rovodev.sh' in content:
+    print('peon-ping hooks already present — skipping')
+    sys.exit(0)
+
+peon_events = '    - name: on_complete\n      commands:\n        - command: bash {a} on_complete\n    - name: on_error\n      commands:\n        - command: bash {a} on_error\n    - name: on_tool_permission\n      commands:\n        - command: bash {a} on_tool_permission\n'.format(a=adapter_path)
+
+if 'eventHooks:' not in content and 'eventHooks :' not in content:
+    hooks_block = '\neventHooks:\n  events:\n' + peon_events
+    with open(config_path, 'a') as f:
+        f.write(hooks_block)
+elif 'events: []' in content or 'events:[]' in content:
+    content = re.sub(r'events:\s*\[\]', 'events:\n' + peon_events, content, count=1)
+    with open(config_path, 'w') as f:
+        f.write(content)
+else:
+    lines = content.split('\n')
+    in_event_hooks = False
+    in_events = False
+    name_indent = None
+    cmd_indent = None
+    event_map = {}
+    current_event = None
+    for i, line in enumerate(lines):
+        stripped = line.lstrip()
+        if stripped.startswith('eventHooks'):
+            in_event_hooks = True
+        elif in_event_hooks and stripped.startswith('events'):
+            in_events = True
+        elif in_events and stripped.startswith('- name:'):
+            if name_indent is None:
+                name_indent = len(line) - len(stripped)
+            current_event = stripped.split('- name:')[1].strip()
+            event_map[current_event] = {'name_idx': i, 'commands_idx': None, 'last_cmd_idx': None}
+        elif in_events and current_event and stripped.startswith('commands:'):
+            event_map[current_event]['commands_idx'] = i
+        elif in_events and current_event and stripped.startswith('- command:'):
+            if cmd_indent is None:
+                cmd_indent = len(line) - len(stripped)
+            event_map[current_event]['last_cmd_idx'] = i
+        elif in_events and line and not line.startswith(' ') and not line.startswith('\t'):
+            break
+    if name_indent is None:
+        name_indent = 4
+    if cmd_indent is None:
+        cmd_indent = name_indent + 4
+    rovodev_events = {'on_complete': 'on_complete', 'on_error': 'on_error', 'on_tool_permission': 'on_tool_permission'}
+    pad_cmd = ' ' * cmd_indent
+    new_cmd_template = pad_cmd + '- command: bash {adapter} {event}\n'
+    inserted_events = set()
+    for event_name, rovodev_arg in sorted(rovodev_events.items(), key=lambda x: event_map.get(x[0], {}).get('last_cmd_idx', 99999), reverse=True):
+        if event_name in event_map and event_map[event_name]['last_cmd_idx'] is not None:
+            insert_at = event_map[event_name]['last_cmd_idx'] + 1
+            new_line = new_cmd_template.format(adapter=adapter_path, event=rovodev_arg).rstrip()
+            lines.insert(insert_at, new_line)
+            inserted_events.add(event_name)
+    missing = [e for e in rovodev_events if e not in inserted_events]
+    if missing:
+        last_event_end = 0
+        for ev_data in event_map.values():
+            idx = ev_data.get('last_cmd_idx') or ev_data.get('commands_idx') or ev_data.get('name_idx', 0)
+            if idx > last_event_end:
+                last_event_end = idx
+        offset = len(inserted_events)
+        insert_at = last_event_end + 1 + offset
+        pad = ' ' * name_indent
+        pad2 = ' ' * (name_indent + 2)
+        pad3 = ' ' * cmd_indent
+        new_entries = ''
+        for ev in missing:
+            new_entries += '{p}- name: {e}\n{p2}commands:\n{p3}- command: bash {a} {e}\n'.format(p=pad, p2=pad2, p3=pad3, e=ev, a=adapter_path)
+        lines.insert(insert_at, new_entries.rstrip())
+    with open(config_path, 'w') as f:
+        f.write('\n'.join(lines))
+
+print('Rovo Dev CLI event hooks registered in ' + config_path)
+print('Restart Rovo Dev CLI for hooks to take effect.')
+"
+        else
+          # No config file — create one with event hooks
+          cat > "$ROVODEV_CONFIG" <<ROVODEVEOF
+eventHooks:
+  events:
+    - name: on_complete
+      commands:
+        - command: bash $RD_ADAPTER on_complete
+    - name: on_error
+      commands:
+        - command: bash $RD_ADAPTER on_error
+    - name: on_tool_permission
+      commands:
+        - command: bash $RD_ADAPTER on_tool_permission
+ROVODEVEOF
+          echo "Rovo Dev CLI config created at $ROVODEV_CONFIG"
+          echo "Restart Rovo Dev CLI for hooks to take effect."
+        fi
+
+        echo "Rovo Dev CLI setup complete."
+      fi
+
+      # -----------------------------------------------------------------------
+      # Phase 9: Summary
       # -----------------------------------------------------------------------
       echo ""
       echo "=== Setup complete! ==="
@@ -819,6 +955,12 @@ class PeonPing < Formula
       if [ "$HAS_DEEPAGENTS" = true ]; then
         echo "deepagents-cli:"
         echo "  Hooks:   $DEEPAGENTS_HOOKS_FILE"
+        echo ""
+      fi
+      if [ "$HAS_ROVODEV" = true ]; then
+        echo "Rovo Dev CLI:"
+        echo "  Config:  $ROVODEV_CONFIG"
+        echo "  Restart Rovo Dev CLI to activate."
         echo ""
       fi
       echo "Other IDEs (Kilo CLI, Kiro, Codex, Antigravity, OpenClaw): see https://peonping.com for adapter setup."
@@ -892,7 +1034,7 @@ class PeonPing < Formula
         peon-ping-setup
 
       Auto-detects installed IDEs (Claude Code, Cursor, OpenCode, Windsurf,
-      deepagents-cli) and sets up hooks/plugins and downloads sound packs for each.
+      deepagents-cli, Rovo Dev CLI) and sets up hooks/plugins and downloads sound packs for each.
 
       Options:
         peon-ping-setup              Install 5 default packs
