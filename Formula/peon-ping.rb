@@ -780,7 +780,7 @@ class PeonPing < Formula
           echo ""
           echo "Warning: Rovo Dev CLI hook registration failed."
           echo "Please inspect your config at: $ROVODEV_CONFIG"
-          echo "For manual setup, see: https://peonping.com/docs/rovodev"
+          echo "For manual setup, see: https://github.com/PeonPing/peon-ping#rovo-dev-cli-setup"
           echo ""
         fi
       fi
