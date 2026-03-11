@@ -782,108 +782,49 @@ class PeonPing < Formula
 
         echo "Registering Rovo Dev CLI event hooks..."
         if [ -f "$ROVODEV_CONFIG" ]; then
-          python3 -c "
-import re, sys
-
-config_path = '$ROVODEV_CONFIG'
-adapter_path = '$RD_ADAPTER'
-
-with open(config_path, 'r') as f:
-    content = f.read()
-
-# Skip if peon-ping adapter is already referenced
-if 'rovodev.sh' in content:
-    print('peon-ping hooks already present — skipping')
-    sys.exit(0)
-
-peon_events = '    - name: on_complete\n      commands:\n        - command: bash {a} on_complete\n    - name: on_error\n      commands:\n        - command: bash {a} on_error\n    - name: on_tool_permission\n      commands:\n        - command: bash {a} on_tool_permission\n'.format(a=adapter_path)
-
-if 'eventHooks:' not in content and 'eventHooks :' not in content:
-    hooks_block = '\neventHooks:\n  events:\n' + peon_events
-    with open(config_path, 'a') as f:
-        f.write(hooks_block)
-elif 'events: []' in content or 'events:[]' in content:
-    content = re.sub(r'events:\s*\[\]', 'events:\n' + peon_events, content, count=1)
-    with open(config_path, 'w') as f:
-        f.write(content)
-else:
-    lines = content.split('\n')
-    in_event_hooks = False
-    in_events = False
-    name_indent = None
-    cmd_indent = None
-    event_map = {}
-    current_event = None
-    for i, line in enumerate(lines):
-        stripped = line.lstrip()
-        if stripped.startswith('eventHooks'):
-            in_event_hooks = True
-        elif in_event_hooks and stripped.startswith('events'):
-            in_events = True
-        elif in_events and stripped.startswith('- name:'):
-            if name_indent is None:
-                name_indent = len(line) - len(stripped)
-            current_event = stripped.split('- name:')[1].strip()
-            event_map[current_event] = {'name_idx': i, 'commands_idx': None, 'last_cmd_idx': None}
-        elif in_events and current_event and stripped.startswith('commands:'):
-            event_map[current_event]['commands_idx'] = i
-        elif in_events and current_event and stripped.startswith('- command:'):
-            if cmd_indent is None:
-                cmd_indent = len(line) - len(stripped)
-            event_map[current_event]['last_cmd_idx'] = i
-        elif in_events and line and not line.startswith(' ') and not line.startswith('\t'):
-            break
-    if name_indent is None:
-        name_indent = 4
-    if cmd_indent is None:
-        cmd_indent = name_indent + 4
-    rovodev_events = {'on_complete': 'on_complete', 'on_error': 'on_error', 'on_tool_permission': 'on_tool_permission'}
-    pad_cmd = ' ' * cmd_indent
-    new_cmd_template = pad_cmd + '- command: bash {adapter} {event}\n'
-    inserted_events = set()
-    for event_name, rovodev_arg in sorted(rovodev_events.items(), key=lambda x: event_map.get(x[0], {}).get('last_cmd_idx', 99999), reverse=True):
-        if event_name in event_map and event_map[event_name]['last_cmd_idx'] is not None:
-            insert_at = event_map[event_name]['last_cmd_idx'] + 1
-            new_line = new_cmd_template.format(adapter=adapter_path, event=rovodev_arg).rstrip()
-            lines.insert(insert_at, new_line)
-            inserted_events.add(event_name)
-    missing = [e for e in rovodev_events if e not in inserted_events]
-    if missing:
-        last_event_end = 0
-        for ev_data in event_map.values():
-            idx = ev_data.get('last_cmd_idx') or ev_data.get('commands_idx') or ev_data.get('name_idx', 0)
-            if idx > last_event_end:
-                last_event_end = idx
-        offset = len(inserted_events)
-        insert_at = last_event_end + 1 + offset
-        pad = ' ' * name_indent
-        pad2 = ' ' * (name_indent + 2)
-        pad3 = ' ' * cmd_indent
-        new_entries = ''
-        for ev in missing:
-            new_entries += '{p}- name: {e}\n{p2}commands:\n{p3}- command: bash {a} {e}\n'.format(p=pad, p2=pad2, p3=pad3, e=ev, a=adapter_path)
-        lines.insert(insert_at, new_entries.rstrip())
-    with open(config_path, 'w') as f:
-        f.write('\n'.join(lines))
-
-print('Rovo Dev CLI event hooks registered in ' + config_path)
-print('Restart Rovo Dev CLI for hooks to take effect.')
-"
+          # Simple approach: just append the three events directly via bash
+          # This avoids Python heredoc/quoting issues entirely
+          if grep -q 'rovodev.sh' "$ROVODEV_CONFIG" 2>/dev/null; then
+            echo "peon-ping hooks already present — skipping"
+          elif grep -q 'events: \[\]' "$ROVODEV_CONFIG" 2>/dev/null; then
+            # Replace empty events array
+            sed -i '' 's/events: \[\]/events:/' "$ROVODEV_CONFIG"
+            printf '    - name: on_complete\n      commands:\n        - command: bash %s on_complete\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
+            printf '    - name: on_error\n      commands:\n        - command: bash %s on_error\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
+            printf '    - name: on_tool_permission\n      commands:\n        - command: bash %s on_tool_permission\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
+            echo "Rovo Dev CLI event hooks registered in $ROVODEV_CONFIG"
+            echo "Restart Rovo Dev CLI for hooks to take effect."
+          elif grep -q 'eventHooks:' "$ROVODEV_CONFIG" 2>/dev/null; then
+            # eventHooks exists with events — append commands to existing or add new entries
+            printf '    - name: on_complete\n      commands:\n        - command: bash %s on_complete\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
+            printf '    - name: on_error\n      commands:\n        - command: bash %s on_error\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
+            printf '    - name: on_tool_permission\n      commands:\n        - command: bash %s on_tool_permission\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
+            echo "Rovo Dev CLI event hooks registered in $ROVODEV_CONFIG"
+            echo "Restart Rovo Dev CLI for hooks to take effect."
+          else
+            # No eventHooks at all — append full block
+            printf '\neventHooks:\n  events:\n' >> "$ROVODEV_CONFIG"
+            printf '    - name: on_complete\n      commands:\n        - command: bash %s on_complete\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
+            printf '    - name: on_error\n      commands:\n        - command: bash %s on_error\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
+            printf '    - name: on_tool_permission\n      commands:\n        - command: bash %s on_tool_permission\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
+            echo "Rovo Dev CLI event hooks registered in $ROVODEV_CONFIG"
+            echo "Restart Rovo Dev CLI for hooks to take effect."
+          fi
         else
           # No config file — create one with event hooks
-          cat > "$ROVODEV_CONFIG" <<ROVODEVEOF
-eventHooks:
-  events:
-    - name: on_complete
-      commands:
-        - command: bash $RD_ADAPTER on_complete
-    - name: on_error
-      commands:
-        - command: bash $RD_ADAPTER on_error
-    - name: on_tool_permission
-      commands:
-        - command: bash $RD_ADAPTER on_tool_permission
-ROVODEVEOF
+          printf '%s\n' \
+            "eventHooks:" \
+            "  events:" \
+            "    - name: on_complete" \
+            "      commands:" \
+            "        - command: bash $RD_ADAPTER on_complete" \
+            "    - name: on_error" \
+            "      commands:" \
+            "        - command: bash $RD_ADAPTER on_error" \
+            "    - name: on_tool_permission" \
+            "      commands:" \
+            "        - command: bash $RD_ADAPTER on_tool_permission" \
+            > "$ROVODEV_CONFIG"
           echo "Rovo Dev CLI config created at $ROVODEV_CONFIG"
           echo "Restart Rovo Dev CLI for hooks to take effect."
         fi
