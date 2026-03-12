@@ -769,67 +769,20 @@ class PeonPing < Formula
         echo ""
         echo "--- Setting up Rovo Dev CLI ---"
 
-        # Use the adapter from Claude install dir or Homebrew libexec
-        if [ "$HAS_CLAUDE" = true ]; then
-          RD_ADAPTER="$CLAUDE_DIR/hooks/peon-ping/adapters/rovodev.sh"
-        else
-          RD_ADAPTER="$LIBEXEC/adapters/rovodev.sh"
-        fi
-
-        # Find config file (config.yml or config.yaml)
+        # Find config file (config.yml or config.yaml) for summary output
         ROVODEV_CONFIG="$ROVODEV_DIR/config.yml"
         [ ! -f "$ROVODEV_CONFIG" ] && [ -f "$ROVODEV_DIR/config.yaml" ] && ROVODEV_CONFIG="$ROVODEV_DIR/config.yaml"
 
-        echo "Registering Rovo Dev CLI event hooks..."
-        if [ -f "$ROVODEV_CONFIG" ]; then
-          # Simple approach: just append the three events directly via bash
-          # This avoids Python heredoc/quoting issues entirely
-          if grep -q 'rovodev.sh' "$ROVODEV_CONFIG" 2>/dev/null; then
-            echo "peon-ping hooks already present — skipping"
-          elif grep -q 'events: \[\]' "$ROVODEV_CONFIG" 2>/dev/null; then
-            # Replace empty events array
-            sed -i '' 's/events: \[\]/events:/' "$ROVODEV_CONFIG"
-            printf '    - name: on_complete\n      commands:\n        - command: bash %s on_complete\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
-            printf '    - name: on_error\n      commands:\n        - command: bash %s on_error\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
-            printf '    - name: on_tool_permission\n      commands:\n        - command: bash %s on_tool_permission\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
-            echo "Rovo Dev CLI event hooks registered in $ROVODEV_CONFIG"
-            echo "Restart Rovo Dev CLI for hooks to take effect."
-          elif grep -q 'eventHooks:' "$ROVODEV_CONFIG" 2>/dev/null; then
-            # eventHooks exists with events — append commands to existing or add new entries
-            printf '    - name: on_complete\n      commands:\n        - command: bash %s on_complete\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
-            printf '    - name: on_error\n      commands:\n        - command: bash %s on_error\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
-            printf '    - name: on_tool_permission\n      commands:\n        - command: bash %s on_tool_permission\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
-            echo "Rovo Dev CLI event hooks registered in $ROVODEV_CONFIG"
-            echo "Restart Rovo Dev CLI for hooks to take effect."
-          else
-            # No eventHooks at all — append full block
-            printf '\neventHooks:\n  events:\n' >> "$ROVODEV_CONFIG"
-            printf '    - name: on_complete\n      commands:\n        - command: bash %s on_complete\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
-            printf '    - name: on_error\n      commands:\n        - command: bash %s on_error\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
-            printf '    - name: on_tool_permission\n      commands:\n        - command: bash %s on_tool_permission\n' "$RD_ADAPTER" >> "$ROVODEV_CONFIG"
-            echo "Rovo Dev CLI event hooks registered in $ROVODEV_CONFIG"
-            echo "Restart Rovo Dev CLI for hooks to take effect."
-          fi
+        # Delegate to install.sh which has robust YAML handling
+        if bash "$LIBEXEC/install.sh" --rovodev-only; then
+          echo "Rovo Dev CLI setup complete."
         else
-          # No config file — create one with event hooks
-          printf '%s\n' \
-            "eventHooks:" \
-            "  events:" \
-            "    - name: on_complete" \
-            "      commands:" \
-            "        - command: bash $RD_ADAPTER on_complete" \
-            "    - name: on_error" \
-            "      commands:" \
-            "        - command: bash $RD_ADAPTER on_error" \
-            "    - name: on_tool_permission" \
-            "      commands:" \
-            "        - command: bash $RD_ADAPTER on_tool_permission" \
-            > "$ROVODEV_CONFIG"
-          echo "Rovo Dev CLI config created at $ROVODEV_CONFIG"
-          echo "Restart Rovo Dev CLI for hooks to take effect."
+          echo ""
+          echo "Warning: Rovo Dev CLI hook registration failed."
+          echo "Please inspect your config at: $ROVODEV_CONFIG"
+          echo "For manual setup, see: https://github.com/PeonPing/peon-ping#rovo-dev-cli-setup"
+          echo ""
         fi
-
-        echo "Rovo Dev CLI setup complete."
       fi
 
       # -----------------------------------------------------------------------
