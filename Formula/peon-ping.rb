@@ -1,8 +1,8 @@
 class PeonPing < Formula
   desc "Sound effects and desktop notifications for AI coding agents"
   homepage "https://peonping.com"
-  url "https://github.com/PeonPing/peon-ping/archive/refs/tags/v2.15.1.tar.gz"
-  sha256 "e3f8be54d2cc782088f96cc911102f67b2c1d10ec9de1ca59590457841cbe1a8"
+  url "https://github.com/PeonPing/peon-ping/archive/refs/tags/v2.15.2.tar.gz"
+  sha256 "13a416b8c347087549caa351aa41d4d0c926734967ac396671b631818458ee1f"
   license "MIT"
 
   depends_on "python@3"
