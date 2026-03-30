@@ -16,6 +16,14 @@ class PeonPing < Formula
     libexec.install "install.sh"
     libexec.install "completions.bash"
     libexec.install "completions.fish"
+    libexec.install "completions.zsh" if (buildpath/"completions.zsh").exist?
+
+    # Install shell completions for automatic loading by Homebrew
+    bash_completion.install "completions.bash" => "peon"
+    if (buildpath/"completions.zsh").exist?
+      zsh_completion.install "completions.zsh" => "_peon"
+    end
+    fish_completion.install "completions.fish" => "peon.fish"
 
     # Install relay server (devcontainer audio support)
     libexec.install "relay.sh" if (buildpath/"relay.sh").exist?
@@ -345,6 +353,7 @@ class PeonPing < Formula
         ln -sf "$LIBEXEC/uninstall.sh" "$INSTALL_DIR/uninstall.sh"
         ln -sf "$LIBEXEC/completions.bash" "$INSTALL_DIR/completions.bash"
         ln -sf "$LIBEXEC/completions.fish" "$INSTALL_DIR/completions.fish"
+        [ -f "$LIBEXEC/completions.zsh" ] && ln -sf "$LIBEXEC/completions.zsh" "$INSTALL_DIR/completions.zsh"
         # Link relay server if available
         [ -f "$LIBEXEC/relay.sh" ] && ln -sf "$LIBEXEC/relay.sh" "$INSTALL_DIR/relay.sh"
         mkdir -p "$INSTALL_DIR/adapters"
