@@ -46,6 +46,9 @@ class PeonPing < Formula
       (libexec/"scripts").install Dir["scripts/*.swift"] if Dir["scripts/*.swift"].any?
     end
 
+    # Ensure all shell scripts are executable (some are committed as 644 in git)
+    Dir[libexec/"scripts/*.sh", libexec/"adapters/*.sh"].each { |f| chmod 0755, f }
+
     # Install MCP server
     if (buildpath/"mcp").exist?
       (libexec/"mcp").install Dir["mcp/*"]
