@@ -121,13 +121,9 @@ class PeonPing < Formula
 
       # Use the stable opt path so symlinks survive brew upgrades.
       LIBEXEC="$(brew --prefix peon-ping)/libexec"
-      REGISTRY_URL="https://peonping.github.io/registry/index.json"
       PACKS_DIR="$HOME/.openpeon/packs"
 
       DEFAULT_PACKS="peon peasant sc_kerrigan sc_battlecruiser glados"
-      FALLBACK_PACKS="acolyte_de acolyte_ru aoe2 aom_greek brewmaster_ru dota2_axe duke_nukem glados hd2_helldiver molag_bal murloc ocarina_of_time peon peon_cz peon_de peon_es peon_fr peon_pl peon_ru peasant peasant_cz peasant_es peasant_fr peasant_ru ra2_kirov ra2_soviet_engineer ra_soviet rick sc_battlecruiser sc_firebat sc_kerrigan sc_medic sc_scv sc_tank sc_terran sc_vessel sheogorath sopranos tf2_engineer wc2_peasant"
-      FALLBACK_REPO="PeonPing/og-packs"
-      FALLBACK_REF="v1.1.0"
 
       # -----------------------------------------------------------------------
       # Phase 2: Auto-detect installed IDEs
@@ -188,154 +184,21 @@ class PeonPing < Formula
 
       # -----------------------------------------------------------------------
       # Phase 3: Download sound packs to shared CESP path (~/.openpeon/packs/)
+      # Delegates to pack-download.sh (shared engine with `peon packs install`)
       # -----------------------------------------------------------------------
-      PACKS=""
-      ALL_PACKS=""
-      REGISTRY_JSON=""
-      echo "Fetching pack registry..."
-      if REGISTRY_JSON=$(curl -fsSL "$REGISTRY_URL" 2>/dev/null); then
-        ALL_PACKS=$(python3 -c "
-      import json, sys
-      data = json.loads(sys.stdin.read())
-      for p in data.get('packs', []):
-          print(p['name'])
-      " <<< "$REGISTRY_JSON")
-        TOTAL_AVAILABLE=$(echo "$ALL_PACKS" | wc -l | tr -d ' ')
-        echo "Registry: $TOTAL_AVAILABLE packs available"
-      else
-        echo "Warning: Could not fetch registry, using fallback pack list"
-        ALL_PACKS="$FALLBACK_PACKS"
-      fi
+      PACK_DL="$LIBEXEC/scripts/pack-download.sh"
+      OPENPEON_DIR="$HOME/.openpeon"
+      mkdir -p "$OPENPEON_DIR/packs"
 
-      # Select packs to install
+      PACK_DL_ARGS=(--dir="$OPENPEON_DIR")
       if [ -n "$CUSTOM_PACKS" ]; then
-        PACKS=$(echo "$CUSTOM_PACKS" | tr ',' ' ')
-        echo "Installing custom packs: $PACKS"
+        PACK_DL_ARGS+=(--packs="$CUSTOM_PACKS")
       elif [ "$INSTALL_ALL" = true ]; then
-        PACKS="$ALL_PACKS"
-        echo "Installing all $(echo "$PACKS" | wc -l | tr -d ' ') packs..."
+        PACK_DL_ARGS+=(--all)
       else
-        PACKS="$DEFAULT_PACKS"
-        echo "Installing $(echo "$PACKS" | wc -w | tr -d ' ') default packs (use --all for all $(echo "$ALL_PACKS" | wc -l | tr -d ' '))"
+        PACK_DL_ARGS+=(--packs="${DEFAULT_PACKS// /,}")
       fi
-
-      # URL-encode characters that break raw GitHub URLs (e.g. ? in filenames)
-      urlencode_filename() {
-        local f="$1"
-        f="${f//\\?/%3F}"
-        f="${f//\\!/%21}"
-        f="${f//\\#/%23}"
-        printf '%s' "$f"
-      }
-
-      # Compute sha256 of a file (portable across macOS and Linux)
-      file_sha256() {
-        if command -v shasum &>/dev/null; then
-          shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1
-        elif command -v sha256sum &>/dev/null; then
-          sha256sum "$1" 2>/dev/null | cut -d' ' -f1
-        else
-          python3 -c "import hashlib; print(hashlib.sha256(open('$1','rb').read()).hexdigest())" 2>/dev/null
-        fi
-      }
-
-      # Check if a downloaded sound file matches its stored checksum
-      is_cached_valid() {
-        local filepath="$1" checksums_file="$2" filename="$3"
-        [ -s "$filepath" ] || return 1
-        [ -f "$checksums_file" ] || return 1
-        local stored_hash current_hash
-        stored_hash=$(grep "^$filename " "$checksums_file" 2>/dev/null | cut -d' ' -f2)
-        [ -n "$stored_hash" ] || return 1
-        current_hash=$(file_sha256 "$filepath")
-        [ "$stored_hash" = "$current_hash" ]
-      }
-
-      # Store checksum for a downloaded file
-      store_checksum() {
-        local checksums_file="$1" filename="$2" filepath="$3"
-        local hash
-        hash=$(file_sha256 "$filepath")
-        grep -v "^$filename " "$checksums_file" > "$checksums_file.tmp" 2>/dev/null || true
-        echo "$filename $hash" >> "$checksums_file.tmp"
-        mv "$checksums_file.tmp" "$checksums_file"
-      }
-
-      # Download packs to shared CESP path
-      # Security: read registry fields without eval to prevent code injection if registry is compromised/MITM'd
-      for pack in $PACKS; do
-        mkdir -p "$PACKS_DIR/$pack/sounds"
-        SOURCE_REPO="" SOURCE_REF="" SOURCE_PATH=""
-        if [ -n "$REGISTRY_JSON" ]; then
-          IFS=$'\\t' read -r SOURCE_REPO SOURCE_REF SOURCE_PATH <<< "$(python3 -c "
-      import json, sys, re
-      pack_name = sys.argv[1]
-      data = json.loads(sys.stdin.read())
-      for p in data.get('packs', []):
-          if p.get('name') == pack_name:
-              repo = p.get('source_repo', '') or ''
-              ref = p.get('source_ref', 'main') or 'main'
-              path = p.get('source_path', '') or ''
-              # Allow only safe chars for URL path components (no shell metacharacters)
-              repo = re.sub(r'[^a-zA-Z0-9_./-]', '', repo)
-              ref = re.sub(r'[^a-zA-Z0-9_.-]', '', ref)
-              path = re.sub(r'[^a-zA-Z0-9_./-]', '', path)
-              print(repo, ref, path, sep='\\t')
-              break
-      else:
-          print('', 'main', '', sep='\\t')
-      " "$pack" <<< "$REGISTRY_JSON")"
-        fi
-        if [ -z "$SOURCE_REPO" ]; then
-          SOURCE_REPO="$FALLBACK_REPO"
-          SOURCE_REF="$FALLBACK_REF"
-          SOURCE_PATH="$pack"
-        fi
-        if [ -n "$SOURCE_PATH" ]; then
-          PACK_BASE="https://raw.githubusercontent.com/$SOURCE_REPO/$SOURCE_REF/$SOURCE_PATH"
-        else
-          PACK_BASE="https://raw.githubusercontent.com/$SOURCE_REPO/$SOURCE_REF"
-        fi
-        if ! curl -fsSL "$PACK_BASE/openpeon.json" -o "$PACKS_DIR/$pack/openpeon.json" 2>/dev/null; then
-          echo "  Warning: failed to download manifest for $pack" >&2
-          continue
-        fi
-        manifest="$PACKS_DIR/$pack/openpeon.json"
-        CHECKSUMS_FILE="$PACKS_DIR/$pack/.checksums"
-        touch "$CHECKSUMS_FILE"
-        python3 -c "
-      import json, os
-      m = json.load(open('$manifest'))
-      seen = set()
-      for cat in m.get('categories', {}).values():
-          for s in cat.get('sounds', []):
-              f = s['file']
-              basename = os.path.basename(f)
-              if basename not in seen:
-                  seen.add(basename)
-                  print(basename)
-      " | while read -r sfile; do
-          if is_cached_valid "$PACKS_DIR/$pack/sounds/$sfile" "$CHECKSUMS_FILE" "$sfile"; then
-            : # already downloaded and checksum matches
-          elif curl -fsSL "$PACK_BASE/sounds/$(urlencode_filename "$sfile")" -o "$PACKS_DIR/$pack/sounds/$sfile" </dev/null 2>/dev/null; then
-            store_checksum "$CHECKSUMS_FILE" "$sfile" "$PACKS_DIR/$pack/sounds/$sfile"
-          else
-            echo "  Warning: failed to download $pack/sounds/$sfile" >&2
-          fi
-        done
-      done
-
-      # Verify sounds
-      echo ""
-      for pack in $PACKS; do
-        sound_dir="$PACKS_DIR/$pack/sounds"
-        sound_count=$({ ls "$sound_dir"/*.wav "$sound_dir"/*.mp3 "$sound_dir"/*.ogg 2>/dev/null || true; } | wc -l | tr -d ' ')
-        if [ "$sound_count" -eq 0 ]; then
-          echo "[$pack] Warning: No sound files found!"
-        else
-          echo "[$pack] $sound_count sound files installed."
-        fi
-      done
+      bash "$PACK_DL" "${PACK_DL_ARGS[@]}"
 
       # -----------------------------------------------------------------------
       # Phase 4: Claude Code setup
