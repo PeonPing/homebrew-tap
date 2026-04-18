@@ -313,6 +313,19 @@ class PeonPing < Formula
           fi
         fi
 
+        # Build meeting-detect (mic-in-use detection for meeting_detect config)
+        if command -v swiftc &>/dev/null; then
+          MEETING_SRC="$LIBEXEC/scripts/meeting-detect.swift"
+          MEETING_BIN="$INSTALL_DIR/scripts/meeting-detect"
+          if [ -f "$MEETING_SRC" ] && [ ! -x "$MEETING_BIN" ]; then
+            echo "Building meeting-detect (mic-in-use detection)..."
+            swiftc -O -o "$MEETING_BIN" "$MEETING_SRC" \
+              -framework CoreAudio 2>/dev/null \
+              && echo "  meeting-detect built successfully" \
+              || echo "  Warning: could not build meeting-detect, meeting_detect config will be a no-op"
+          fi
+        fi
+
         # Register Claude Code hooks
         echo "Registering Claude Code hooks..."
         python3 -c "
