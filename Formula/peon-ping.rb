@@ -134,6 +134,7 @@ class PeonPing < Formula
       WINDSURF_DIR="$HOME/.codeium/windsurf"
       DEEPAGENTS_DIR="$HOME/.deepagents"
       ROVODEV_DIR="$HOME/.rovodev"
+      COPILOT_DIR="$HOME/.copilot"
 
       HAS_CLAUDE=false
       HAS_CURSOR=false
@@ -141,16 +142,19 @@ class PeonPing < Formula
       HAS_WINDSURF=false
       HAS_DEEPAGENTS=false
       HAS_ROVODEV=false
+      HAS_COPILOT=false
       [ -d "$CLAUDE_DIR" ]      && HAS_CLAUDE=true
       [ -d "$CURSOR_DIR" ]      && HAS_CURSOR=true
       [ -d "$OPENCODE_DIR" ]    && HAS_OPENCODE=true
       [ -d "$WINDSURF_DIR" ]    && HAS_WINDSURF=true
       [ -d "$DEEPAGENTS_DIR" ]  && HAS_DEEPAGENTS=true
       [ -d "$ROVODEV_DIR" ]     && HAS_ROVODEV=true
+      [ -d "$COPILOT_DIR" ]     && HAS_COPILOT=true
 
       if [ "$HAS_CLAUDE" = false ] && [ "$HAS_CURSOR" = false ] && \
          [ "$HAS_OPENCODE" = false ] && [ "$HAS_WINDSURF" = false ] && \
-         [ "$HAS_DEEPAGENTS" = false ] && [ "$HAS_ROVODEV" = false ]; then
+         [ "$HAS_DEEPAGENTS" = false ] && [ "$HAS_ROVODEV" = false ] && \
+         [ "$HAS_COPILOT" = false ]; then
         echo "Error: No supported IDE found."
         echo ""
         echo "peon-ping supports:"
@@ -160,6 +164,7 @@ class PeonPing < Formula
         echo "  Windsurf         — expected at $WINDSURF_DIR"
         echo "  deepagents-cli   — expected at $DEEPAGENTS_DIR"
         echo "  Rovo Dev CLI     — expected at $ROVODEV_DIR"
+        echo "  GitHub Copilot   — expected at $COPILOT_DIR"
         echo ""
         echo "Install one of these IDEs first, then re-run peon-ping-setup."
         exit 1
@@ -180,6 +185,8 @@ class PeonPing < Formula
       [ "$HAS_DEEPAGENTS" = false ] && echo "  [ ] deepagents-cli (not found)"
       [ "$HAS_ROVODEV" = true ]     && echo "  [x] Rovo Dev CLI ($ROVODEV_DIR)"
       [ "$HAS_ROVODEV" = false ]    && echo "  [ ] Rovo Dev CLI (not found)"
+      [ "$HAS_COPILOT" = true ]     && echo "  [x] GitHub Copilot ($COPILOT_DIR)"
+      [ "$HAS_COPILOT" = false ]    && echo "  [ ] GitHub Copilot (not found)"
       echo ""
 
       # -----------------------------------------------------------------------
