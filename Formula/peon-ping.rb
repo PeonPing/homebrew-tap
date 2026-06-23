@@ -123,7 +123,7 @@ class PeonPing < Formula
       LIBEXEC="$(brew --prefix peon-ping)/libexec"
       PACKS_DIR="$HOME/.openpeon/packs"
 
-      DEFAULT_PACKS="peon peasant sc_kerrigan sc_battlecruiser glados"
+      DEFAULT_PACKS="peon peasant sc_scv sc_battlecruiser glados"
 
       # -----------------------------------------------------------------------
       # Phase 2: Auto-detect installed IDEs
